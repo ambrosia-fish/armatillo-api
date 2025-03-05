@@ -2,11 +2,10 @@
   "name": "armatillo-api",
   "version": "1.0.0",
   "description": "Backend API for Armatillo BFRB tracking app",
-  "main": "dist/index.js",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node dist/index.js",
-    "dev": "nodemon src/index.ts",
-    "build": "tsc",
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
