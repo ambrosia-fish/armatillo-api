@@ -192,11 +192,21 @@ const refreshToken = async (req, res) => {
  */
 const logout = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    // Get the user ID from the JWT token
+    const userId = req.user?._id;
     
+    // Process the provided refresh token
+    const { refreshToken } = req.body;
     if (refreshToken) {
-      // Remove refresh token from database if provided
+      // Remove specific refresh token from database if provided
       await RefreshToken.deleteOne({ token: refreshToken });
+    }
+
+    // If we have a userId, also invalidate ALL refresh tokens for this user
+    // This provides a more complete logout experience
+    if (userId) {
+      await RefreshToken.deleteMany({ userId: userId });
+      console.log(`Deleted all refresh tokens for user ${userId}`);
     }
     
     res.json({ success: true, message: 'Logged out successfully' });
@@ -233,19 +243,27 @@ const getCurrentUser = async (req, res) => {
  */
 const initiateOAuth = (req, res) => {
   try {
-    // Get state from request (CSRF protection)
+    // Get parameters from request
     const state = req.query.state;
     const forceLogin = req.query.force_login === 'true';
+    const useIncognito = req.query.use_incognito === 'true';
+    const timestamp = req.query.timestamp || Date.now(); // Timestamp to prevent caching
+    const nonce = req.query.nonce || Math.random().toString(36).substring(2); // Unique request ID
+    const loginHint = req.query.login_hint || ''; // Optional login hint (email)
+    const authuser = req.query.authuser || ''; // Optional authuser param
+    
+    // Determine prompt type based on parameters 
     const promptType = req.query.prompt || (forceLogin ? 'select_account' : 'none');
     
-    console.log(`OAuth initiated with state=${state}, force_login=${forceLogin}, prompt=${promptType}`);
+    console.log(`OAuth initiated with: state=${state}, force_login=${forceLogin}, prompt=${promptType}, `
+      + `timestamp=${timestamp}, nonce=${nonce}, use_incognito=${useIncognito}`);
     
     // Store state in session
     if (state) {
       req.session.oauthState = state;
     }
     
-    // Build OAuth URL
+    // Build OAuth URL with all parameters to force account selection
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     authUrl.searchParams.append('client_id', process.env.GOOGLE_CLIENT_ID);
     authUrl.searchParams.append('redirect_uri', `${process.env.API_URL}/api/auth/google-callback`);
@@ -253,15 +271,31 @@ const initiateOAuth = (req, res) => {
     authUrl.searchParams.append('scope', 'profile email');
     
     // Add prompt parameter to control account selection behavior
-    // - 'select_account': Always show account selection screen
-    // - 'none': Don't show account selection if user is already logged in
-    // - 'consent': Always show consent screen
     authUrl.searchParams.append('prompt', promptType);
+    
+    // Add additional parameters to prevent caching and force fresh login
+    if (forceLogin) {
+      authUrl.searchParams.append('include_granted_scopes', 'false');
+      
+      if (loginHint) {
+        authUrl.searchParams.append('login_hint', loginHint);
+      }
+      
+      if (authuser) {
+        authUrl.searchParams.append('authuser', authuser);
+      }
+    }
     
     // Add state for CSRF protection
     if (state) {
       authUrl.searchParams.append('state', state);
     }
+    
+    // Add nonce for additional security (prevents replay attacks)
+    authUrl.searchParams.append('nonce', nonce);
+    
+    // Add timestamp to prevent caching
+    authUrl.searchParams.append('_', timestamp);
     
     console.log(`Redirecting to Google OAuth URL: ${authUrl.toString()}`);
     
@@ -325,6 +359,11 @@ const handleOAuthCallback = async (req, res) => {
       }
     }
     
+    // Before generating new tokens, invalidate any existing refresh tokens
+    // This helps ensure a clean session state
+    await RefreshToken.deleteMany({ userId: user._id });
+    console.log(`Deleted all previous refresh tokens for user ${user._id}`);
+    
     // Generate tokens
     const { token, refreshToken, expiresIn } = generateTokens(user._id);
     
@@ -334,9 +373,12 @@ const handleOAuthCallback = async (req, res) => {
       token: refreshToken
     });
     
+    // Add a randomized cache-busting parameter to prevent browser caching
+    const cacheBuster = `&cb=${Date.now()}_${Math.random().toString(36).substring(2)}`;
+    
     // Redirect to app with tokens (deep link)
     return res.redirect(
-      `armatillo://auth/callback?token=${token}&refresh_token=${refreshToken}&expires_in=${expiresIn}&state=${state}`
+      `armatillo://auth/callback?token=${token}&refresh_token=${refreshToken}&expires_in=${expiresIn}&state=${state}${cacheBuster}`
     );
   } catch (error) {
     console.error('OAuth callback error:', error);
