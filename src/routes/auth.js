@@ -8,9 +8,14 @@ const {
   getCurrentUser,
   initiateOAuth,
   handleOAuthCallback,
-  exchangeCodeForToken
+  exchangeCodeForToken,
+  reportSecurityEvent
 } = require('../controllers/authController');
-const { authenticate } = require('../middleware/auth');
+const { 
+  authenticate, 
+  authErrorHandler,
+  securityIncidentHandler
+} = require('../middleware/auth');
 
 // Public routes
 router.post('/register', register);
@@ -19,6 +24,9 @@ router.post('/refresh', refreshToken);
 
 // PKCE token exchange endpoint
 router.post('/token', exchangeCodeForToken);
+
+// Security reporting endpoint
+router.post('/report-security-event', securityIncidentHandler);
 
 // OAuth routes
 router.get('/google-mobile', initiateOAuth);
