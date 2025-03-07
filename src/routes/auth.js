@@ -7,7 +7,8 @@ const {
   logout,
   getCurrentUser,
   initiateOAuth,
-  handleOAuthCallback
+  handleOAuthCallback,
+  exchangeCodeForToken
 } = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 
@@ -15,6 +16,9 @@ const { authenticate } = require('../middleware/auth');
 router.post('/register', register);
 router.post('/login', login);
 router.post('/refresh', refreshToken);
+
+// PKCE token exchange endpoint
+router.post('/token', exchangeCodeForToken);
 
 // OAuth routes
 router.get('/google-mobile', initiateOAuth);
