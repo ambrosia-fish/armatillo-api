@@ -8,6 +8,12 @@ const {
   clearCodeChallenge, 
   verifyPKCEChallenge 
 } = require('../utils/pkceUtils');
+const {
+  generateToken,
+  blacklistToken,
+  verifyToken,
+  extractTokenFromHeader
+} = require('../utils/tokenUtils');
 
 /**
  * Generate access and refresh tokens
@@ -16,18 +22,10 @@ const {
  */
 const generateTokens = (userId) => {
   // Access token with 1-hour expiration
-  const token = jwt.sign(
-    { userId }, 
-    process.env.JWT_SECRET, 
-    { expiresIn: '1h' }
-  );
+  const token = generateToken({ userId }, '1h');
   
   // Refresh token with 30-day expiration
-  const refreshToken = jwt.sign(
-    { userId, type: 'refresh' },
-    process.env.JWT_SECRET,
-    { expiresIn: '30d' }
-  );
+  const refreshToken = generateToken({ userId, type: 'refresh' }, '30d');
   
   // Calculate exact expiration time in seconds
   const tokenInfo = jwt.decode(token);
@@ -147,10 +145,8 @@ const refreshToken = async (req, res) => {
     }
     
     // Verify the refresh token
-    let payload;
-    try {
-      payload = jwt.verify(requestToken, process.env.JWT_SECRET);
-    } catch (error) {
+    const decoded = await verifyToken(requestToken);
+    if (!decoded) {
       return res.status(401).json({ 
         error: 'Invalid refresh token',
         code: 'invalid_token'
@@ -158,24 +154,45 @@ const refreshToken = async (req, res) => {
     }
     
     // Check if it's actually a refresh token
-    if (payload.type !== 'refresh') {
+    if (decoded.type !== 'refresh') {
+      // If not a refresh token, blacklist it as it might be an access token misuse
+      await blacklistToken(requestToken, 'access', { 
+        userId: decoded.userId, 
+        reason: 'access_token_used_as_refresh',
+        ipAddress: req.ip
+      });
+      
       return res.status(401).json({ error: 'Invalid token type' });
     }
     
     // Check if token exists in database
     const tokenDoc = await RefreshToken.findOne({ token: requestToken });
     if (!tokenDoc) {
+      // If token not found in db but passes verification, blacklist it
+      await blacklistToken(requestToken, 'refresh', { 
+        userId: decoded.userId, 
+        reason: 'refresh_token_not_in_database',
+        ipAddress: req.ip
+      });
+      
       return res.status(401).json({ error: 'Refresh token not found' });
     }
     
     // Generate new tokens
-    const { token, refreshToken: newRefreshToken, expiresIn } = generateTokens(payload.userId);
+    const { token, refreshToken: newRefreshToken, expiresIn } = generateTokens(decoded.userId);
     
     // Delete old token and save new one
     await RefreshToken.findByIdAndDelete(tokenDoc._id);
     await RefreshToken.create({
-      userId: payload.userId,
+      userId: decoded.userId,
       token: newRefreshToken
+    });
+    
+    // Blacklist the old refresh token to prevent reuse
+    await blacklistToken(requestToken, 'refresh', { 
+      userId: decoded.userId, 
+      reason: 'token_rotation',
+      ipAddress: req.ip
     });
     
     // Return new tokens
@@ -198,11 +215,30 @@ const refreshToken = async (req, res) => {
  */
 const logout = async (req, res) => {
   try {
+    // Get tokens
+    const accessToken = req.token; // Added by auth middleware
     const { refreshToken } = req.body;
     
+    // Blacklist the access token
+    if (accessToken) {
+      await blacklistToken(accessToken, 'access', { 
+        userId: req.user._id,
+        reason: 'user_logout',
+        ipAddress: req.ip
+      });
+    }
+    
+    // Blacklist and remove the refresh token
     if (refreshToken) {
       // Remove refresh token from database if provided
       await RefreshToken.deleteOne({ token: refreshToken });
+      
+      // Blacklist the refresh token
+      await blacklistToken(refreshToken, 'refresh', { 
+        userId: req.user._id,
+        reason: 'user_logout',
+        ipAddress: req.ip
+      });
     }
     
     res.json({ success: true, message: 'Logged out successfully' });
@@ -229,6 +265,33 @@ const getCurrentUser = async (req, res) => {
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user info' });
+  }
+};
+
+/**
+ * @desc    Handle security events reported by clients
+ * @route   POST /api/auth/report-security-event
+ * @access  Public
+ */
+const reportSecurityEvent = async (req, res) => {
+  try {
+    const { reason, tokenFingerprint, deviceInfo } = req.body;
+    
+    if (!reason || !tokenFingerprint) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    console.warn(`Security event reported from ${req.ip}: ${reason}`);
+    
+    // In a production app, this would trigger security alerts
+    // and potentially add the IP to a watch list
+    
+    // Return success to avoid leaking information
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error processing security event:', error);
+    // Still return success to avoid leaking information
+    res.status(200).json({ success: true });
   }
 };
 
@@ -404,6 +467,12 @@ const exchangeCodeForToken = async (req, res) => {
     try {
       codePayload = jwt.verify(code, process.env.JWT_SECRET);
     } catch (error) {
+      // Blacklist invalid auth codes
+      await blacklistToken(code, 'auth_code', { 
+        reason: 'invalid_auth_code',
+        ipAddress: req.ip
+      });
+      
       return res.status(401).json({ 
         error: 'invalid_grant',
         error_description: 'Invalid authorization code' 
@@ -412,6 +481,12 @@ const exchangeCodeForToken = async (req, res) => {
     
     // Check if this is an auth code
     if (codePayload.type !== 'auth_code') {
+      // Blacklist if not an auth code
+      await blacklistToken(code, 'auth_code', { 
+        reason: 'wrong_token_type',
+        ipAddress: req.ip
+      });
+      
       return res.status(401).json({ 
         error: 'invalid_grant',
         error_description: 'Invalid authorization code type' 
@@ -436,6 +511,13 @@ const exchangeCodeForToken = async (req, res) => {
       );
       
       if (!isValid) {
+        // Blacklist this authorization code
+        await blacklistToken(code, 'auth_code', { 
+          userId: codePayload.userId,
+          reason: 'pkce_verification_failed',
+          ipAddress: req.ip
+        });
+        
         return res.status(401).json({ 
           error: 'invalid_grant',
           error_description: 'Code verifier does not match code challenge' 
@@ -475,12 +557,19 @@ const exchangeCodeForToken = async (req, res) => {
     // Clear the temp auth code
     req.session.tempAuthCode = null;
     
+    // Blacklist the used auth code to prevent replay attacks
+    await blacklistToken(code, 'auth_code', { 
+      userId: userId,
+      reason: 'auth_code_used',
+      ipAddress: req.ip
+    });
+    
     // Generate tokens
     const { token, refreshToken, expiresIn } = generateTokens(userId);
     
     // Store refresh token
     await RefreshToken.create({
-      userId: userId,
+      userId,
       token: refreshToken
     });
     
@@ -509,5 +598,6 @@ module.exports = {
   getCurrentUser,
   initiateOAuth,
   handleOAuthCallback,
-  exchangeCodeForToken
+  exchangeCodeForToken,
+  reportSecurityEvent
 };
