@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const RefreshToken = require('../models/RefreshToken');
+const { getGoogleUserData } = require('../utils/googleOAuth');
 
 /**
  * Generate access and refresh tokens
@@ -271,6 +272,10 @@ const handleOAuthCallback = async (req, res) => {
     // Get authorization code and state
     const { code, state } = req.query;
     
+    if (!code) {
+      return res.redirect(`armatillo://auth-error?error=no_code`);
+    }
+    
     // Verify state parameter for CSRF protection
     if (state && req.session.oauthState) {
       if (state !== req.session.oauthState) {
@@ -282,20 +287,30 @@ const handleOAuthCallback = async (req, res) => {
     // Clear stored state
     req.session.oauthState = null;
     
-    // Exchange code for tokens (in a real implementation, would call Google API)
-    // For this example, assume we receive user data from Google
+    // Exchange code for tokens and get user data
+    const userData = await getGoogleUserData(code);
     
     // Find or create user based on Google ID
-    let user = await User.findOne({ googleId: 'google_id_would_be_here' });
+    let user = await User.findOne({ googleId: userData.googleId });
     
     if (!user) {
-      // Create new user from Google data
-      user = await User.create({
-        email: 'email_from_google',
-        displayName: 'name_from_google',
-        googleId: 'google_id_from_google',
-        password: jwt.sign({ random: Math.random() }, process.env.JWT_SECRET) // Random password for OAuth users
-      });
+      // If no user with this Google ID, check by email
+      user = await User.findOne({ email: userData.email });
+      
+      if (user) {
+        // Link Google ID to existing account
+        user.googleId = userData.googleId;
+        await user.save();
+      } else {
+        // Create new user from Google data
+        user = await User.create({
+          email: userData.email,
+          displayName: userData.displayName,
+          googleId: userData.googleId,
+          // Random password for OAuth users
+          password: jwt.sign({ random: Math.random() }, process.env.JWT_SECRET)
+        });
+      }
     }
     
     // Generate tokens
@@ -314,7 +329,7 @@ const handleOAuthCallback = async (req, res) => {
   } catch (error) {
     console.error('OAuth callback error:', error);
     // Deep link back to the app with an error
-    return res.redirect(`armatillo://auth-error?error=server_error`);
+    return res.redirect(`armatillo://auth-error?error=server_error&message=${encodeURIComponent(error.message)}`);
   }
 };
 
