@@ -256,6 +256,7 @@ const initiateOAuth = (req, res) => {
     res.redirect(authUrl.toString());
   } catch (error) {
     console.error('OAuth initiation error:', error);
+    // Return JSON error instead of redirecting to an error page
     res.status(500).json({ error: 'Failed to initiate OAuth flow' });
   }
 };
@@ -273,7 +274,8 @@ const handleOAuthCallback = async (req, res) => {
     // Verify state parameter for CSRF protection
     if (state && req.session.oauthState) {
       if (state !== req.session.oauthState) {
-        return res.redirect(`${process.env.FRONTEND_URL}/auth-error?error=invalid_state`);
+        // Deep link back to the app with an error message
+        return res.redirect(`armatillo://auth-error?error=invalid_state`);
       }
     }
     
@@ -311,7 +313,8 @@ const handleOAuthCallback = async (req, res) => {
     );
   } catch (error) {
     console.error('OAuth callback error:', error);
-    return res.redirect(`${process.env.FRONTEND_URL}/auth-error?error=server_error`);
+    // Deep link back to the app with an error
+    return res.redirect(`armatillo://auth-error?error=server_error`);
   }
 };
 
