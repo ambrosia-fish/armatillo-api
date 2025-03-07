@@ -2,6 +2,12 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const RefreshToken = require('../models/RefreshToken');
 const { getGoogleUserData } = require('../utils/googleOAuth');
+const { 
+  storeCodeChallenge, 
+  getStoredCodeChallenge, 
+  clearCodeChallenge, 
+  verifyPKCEChallenge 
+} = require('../utils/pkceUtils');
 
 /**
  * Generate access and refresh tokens
@@ -236,9 +242,19 @@ const initiateOAuth = (req, res) => {
     // Get state from request (CSRF protection)
     const state = req.query.state;
     
+    // Get PKCE code challenge if provided
+    const codeChallenge = req.query.code_challenge;
+    const codeChallengeMethod = req.query.code_challenge_method || 'S256';
+    
     // Store state in session
     if (state) {
       req.session.oauthState = state;
+    }
+    
+    // Store PKCE code challenge in session if provided
+    if (codeChallenge) {
+      storeCodeChallenge(req, codeChallenge, codeChallengeMethod);
+      console.log(`Stored PKCE code challenge (${codeChallengeMethod}): ${codeChallenge}`);
     }
     
     // Build OAuth URL
@@ -252,6 +268,14 @@ const initiateOAuth = (req, res) => {
     if (state) {
       authUrl.searchParams.append('state', state);
     }
+    
+    // Add additional parameters from the request
+    const additionalParams = ['force_login', 'prompt', 'login_hint', 'authuser', 'nonce'];
+    additionalParams.forEach(param => {
+      if (req.query[param]) {
+        authUrl.searchParams.append(param, req.query[param]);
+      }
+    });
     
     // Redirect to OAuth provider
     res.redirect(authUrl.toString());
@@ -286,6 +310,10 @@ const handleOAuthCallback = async (req, res) => {
     
     // Clear stored state
     req.session.oauthState = null;
+    
+    // Check if we have a stored code challenge (PKCE flow)
+    const pkceData = getStoredCodeChallenge(req);
+    let usePkce = !!pkceData;
     
     // Exchange code for tokens and get user data
     const userData = await getGoogleUserData(code);
@@ -322,14 +350,154 @@ const handleOAuthCallback = async (req, res) => {
       token: refreshToken
     });
     
-    // Redirect to app with tokens (deep link)
-    return res.redirect(
-      `armatillo://auth/callback?token=${token}&refresh_token=${refreshToken}&expires_in=${expiresIn}&state=${state}`
-    );
+    if (usePkce) {
+      // Store a temporary auth code for the PKCE token exchange
+      // In a real implementation, you'd store this with an expiration and link to the user
+      req.session.tempAuthCode = {
+        code: jwt.sign({ userId: user._id, type: 'auth_code' }, process.env.JWT_SECRET, { expiresIn: '5m' }),
+        userId: user._id.toString(),
+        createdAt: Date.now()
+      };
+      
+      // Redirect back to the app with the authorization code
+      return res.redirect(
+        `armatillo://auth/callback?code=${req.session.tempAuthCode.code}&state=${state}`
+      );
+    } else {
+      // Legacy flow - redirect with tokens directly
+      return res.redirect(
+        `armatillo://auth/callback?token=${token}&refresh_token=${refreshToken}&expires_in=${expiresIn}&state=${state}`
+      );
+    }
   } catch (error) {
     console.error('OAuth callback error:', error);
     // Deep link back to the app with an error
     return res.redirect(`armatillo://auth-error?error=server_error&message=${encodeURIComponent(error.message)}`);
+  }
+};
+
+/**
+ * @desc    Exchange authorization code for tokens (PKCE flow)
+ * @route   POST /api/auth/token
+ * @access  Public
+ */
+const exchangeCodeForToken = async (req, res) => {
+  try {
+    const { code, code_verifier, redirect_uri } = req.body;
+    
+    if (!code) {
+      return res.status(400).json({ 
+        error: 'invalid_request', 
+        error_description: 'Authorization code is required' 
+      });
+    }
+    
+    if (!code_verifier) {
+      return res.status(400).json({ 
+        error: 'invalid_request', 
+        error_description: 'Code verifier is required for PKCE' 
+      });
+    }
+    
+    // Verify the authorization code
+    let codePayload;
+    try {
+      codePayload = jwt.verify(code, process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({ 
+        error: 'invalid_grant',
+        error_description: 'Invalid authorization code' 
+      });
+    }
+    
+    // Check if this is an auth code
+    if (codePayload.type !== 'auth_code') {
+      return res.status(401).json({ 
+        error: 'invalid_grant',
+        error_description: 'Invalid authorization code type' 
+      });
+    }
+    
+    // Check if we have a stored code challenge
+    const pkceData = getStoredCodeChallenge(req);
+    if (!pkceData) {
+      return res.status(401).json({ 
+        error: 'invalid_grant',
+        error_description: 'No code challenge found for PKCE verification' 
+      });
+    }
+    
+    // Verify the PKCE code challenge
+    try {
+      const isValid = verifyPKCEChallenge(
+        code_verifier, 
+        pkceData.codeChallenge,
+        pkceData.codeChallengeMethod
+      );
+      
+      if (!isValid) {
+        return res.status(401).json({ 
+          error: 'invalid_grant',
+          error_description: 'Code verifier does not match code challenge' 
+        });
+      }
+    } catch (error) {
+      return res.status(400).json({ 
+        error: 'invalid_request',
+        error_description: error.message 
+      });
+    }
+    
+    // Clear the PKCE data
+    clearCodeChallenge(req);
+    
+    // Check if we have a temp auth code session
+    if (!req.session.tempAuthCode || req.session.tempAuthCode.code !== code) {
+      return res.status(401).json({ 
+        error: 'invalid_grant',
+        error_description: 'Authorization code not found or expired' 
+      });
+    }
+    
+    // Check if the auth code has expired (5 min max)
+    const MAX_AGE = 5 * 60 * 1000; // 5 minutes
+    if (Date.now() - req.session.tempAuthCode.createdAt > MAX_AGE) {
+      req.session.tempAuthCode = null;
+      return res.status(401).json({ 
+        error: 'invalid_grant',
+        error_description: 'Authorization code has expired' 
+      });
+    }
+    
+    // Get the user ID from the temp auth code
+    const userId = req.session.tempAuthCode.userId;
+    
+    // Clear the temp auth code
+    req.session.tempAuthCode = null;
+    
+    // Generate tokens
+    const { token, refreshToken, expiresIn } = generateTokens(userId);
+    
+    // Store refresh token
+    await RefreshToken.create({
+      userId: userId,
+      token: refreshToken
+    });
+    
+    // Success response with tokens in OAuth2 format
+    res.json({
+      access_token: token,
+      token_type: 'Bearer',
+      expires_in: expiresIn,
+      refresh_token: refreshToken,
+      scope: 'profile email'
+    });
+  } catch (error) {
+    console.error('Token exchange error:', error);
+    return res.status(500).json({ 
+      error: 'server_error',
+      error_description: 'An error occurred during token exchange' 
+    });
   }
 };
 
@@ -340,5 +508,6 @@ module.exports = {
   logout,
   getCurrentUser,
   initiateOAuth,
-  handleOAuthCallback
+  handleOAuthCallback,
+  exchangeCodeForToken
 };
