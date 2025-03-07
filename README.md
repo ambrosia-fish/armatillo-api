@@ -1,44 +1,71 @@
 # Armatillo API
 
-Backend API for the Armatillo BFRB (Body-Focused Repetitive Behavior) tracking application.
-
-## Technologies
-
-- TypeScript
-- Express.js
-- MongoDB with Mongoose
-- Node.js
+Backend API for Armatillo BFRB (Body-Focused Repetitive Behavior) tracking app.
 
 ## Setup
 
 1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Create a `.env` file in the root directory with:
+2. Install dependencies: `npm install`
+3. Create a `.env` file with the following variables:
    ```
    PORT=5000
+   MONGO_URI=your_mongodb_connection_string
    NODE_ENV=development
-   MONGO_URI=mongodb://localhost:27017/bfrb-tracker
+   JWT_SECRET=your_jwt_secret_key
+   SESSION_SECRET=your_session_secret
+   API_URL=http://localhost:5000
+   FRONTEND_URL=http://localhost:3000
+   GOOGLE_CLIENT_ID=your_google_client_id
+   GOOGLE_CLIENT_SECRET=your_google_client_secret
    ```
-4. Start development server:
-   ```bash
-   npm run dev
-   ```
+4. Start the development server: `npm run dev`
+
+## Security Features
+
+### Token-based Authentication
+
+The API uses JWT (JSON Web Tokens) for authentication with two types of tokens:
+
+- **Access Token**: Short-lived token (1 hour) used for API access
+- **Refresh Token**: Long-lived token (30 days) used to obtain new access tokens
+
+### Token Endpoints
+
+- `POST /api/auth/register` - Register a new user and get tokens
+- `POST /api/auth/login` - Authenticate user and get tokens
+- `POST /api/auth/refresh` - Use refresh token to get a new access token
+- `POST /api/auth/logout` - Invalidate refresh token (requires authentication)
+- `GET /api/auth/me` - Get current user info (requires authentication)
+
+### OAuth Authentication
+
+OAuth support for mobile apps with CSRF protection:
+
+- `GET /api/auth/google-mobile?state=random_string` - Initiate Google OAuth
+- `GET /api/auth/google-callback` - OAuth callback endpoint
+
+The state parameter is used to prevent CSRF attacks during OAuth flow.
 
 ## API Endpoints
 
-### BFRB Instances
+### Instances
 
 - `GET /api/instances` - Get all instances
-- `GET /api/instances/:id` - Get a specific instance
-- `POST /api/instances` - Create a new instance
-- `PUT /api/instances/:id` - Update an instance
-- `DELETE /api/instances/:id` - Delete an instance
+- `POST /api/instances` - Create new instance
+- `GET /api/instances/:id` - Get instance by ID
+- `PUT /api/instances/:id` - Update instance
+- `DELETE /api/instances/:id` - Delete instance
+
+## Error Handling
+
+The API returns standardized error responses with appropriate status codes and error messages. Authentication errors include specific error codes:
+
+- `invalid_token` - Token is malformed or invalid
+- `token_expired` - Token has expired
+- `no_token` - No authentication token provided
 
 ## Development
 
-- `npm run dev` - Start development server with hot reload
-- `npm run build` - Build for production
-- `npm start` - Start production server
+- Run in development mode: `npm run dev`
+- Run in production mode: `npm start`
+
