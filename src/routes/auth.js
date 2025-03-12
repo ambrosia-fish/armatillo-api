@@ -9,7 +9,8 @@ const {
   initiateOAuth,
   handleOAuthCallback,
   exchangeCodeForToken,
-  reportSecurityEvent
+  reportSecurityEvent,
+  devLogin
 } = require('../controllers/authController');
 const { 
   authenticate, 
@@ -35,5 +36,10 @@ router.get('/google-callback', handleOAuthCallback);
 // Protected routes
 router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getCurrentUser);
+
+// Development-only routes (only available in development environment)
+if (process.env.NODE_ENV === 'development') {
+  router.get('/dev-login', devLogin);
+}
 
 module.exports = router;
