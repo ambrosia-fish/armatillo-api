@@ -35,6 +35,66 @@ const generateTokens = (userId) => {
 };
 
 /**
+ * @desc    Development-only endpoint for bypassing OAuth
+ * @route   GET /api/auth/dev-login
+ * @access  Public (in development only)
+ */
+const devLogin = async (req, res) => {
+  try {
+    // Only allow in development environment
+    if (process.env.NODE_ENV !== 'development') {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    
+    console.log('Using development login endpoint');
+    
+    // Find or create a development user
+    let user = await User.findOne({ email: 'dev@example.com' });
+    
+    if (!user) {
+      console.log('Creating development user');
+      
+      // Create a dev user
+      user = await User.create({
+        email: 'dev@example.com',
+        displayName: 'Development User',
+        // Use a secure random password even for dev users
+        password: jwt.sign({ random: Math.random() }, process.env.JWT_SECRET)
+      });
+    } else {
+      console.log('Development user already exists');
+    }
+    
+    // Generate tokens
+    const { token, refreshToken, expiresIn } = generateTokens(user._id);
+    
+    // Store refresh token
+    await RefreshToken.create({
+      userId: user._id,
+      token: refreshToken
+    });
+    
+    // Success response with tokens
+    res.json({
+      success: true,
+      token,
+      refreshToken,
+      expiresIn,
+      user: {
+        id: user._id,
+        email: user.email,
+        displayName: user.displayName,
+        firstName: 'Dev',
+        lastName: 'User'
+      }
+    });
+  } catch (error) {
+    console.error('Development login error:', error);
+    res.status(500).json({ error: 'Development login failed' });
+  }
+};
+
+/**
  * @desc    Register a new user
  * @route   POST /api/auth/register
  * @access  Public
@@ -599,5 +659,6 @@ module.exports = {
   initiateOAuth,
   handleOAuthCallback,
   exchangeCodeForToken,
-  reportSecurityEvent
+  reportSecurityEvent,
+  devLogin
 };
