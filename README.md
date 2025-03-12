@@ -46,6 +46,21 @@ OAuth support for mobile apps with CSRF protection:
 
 The state parameter is used to prevent CSRF attacks during OAuth flow.
 
+### Development Authentication Bypass
+
+A special development-only endpoint is available when running with `NODE_ENV=development`:
+
+- `GET /api/auth/dev-login` - Automatically creates a development user and returns valid tokens
+
+This endpoint is designed to work with the Armatillo app's development OAuth bypass feature, allowing developers to skip the OAuth login process during local development. It:
+
+1. Checks if a development user exists (email: `dev@example.com`)
+2. Creates this user if it doesn't exist
+3. Generates standard access and refresh tokens
+4. Returns the tokens in the same format as the regular login endpoints
+
+This endpoint is automatically disabled in production environments.
+
 ## API Endpoints
 
 ### Instances
@@ -68,4 +83,3 @@ The API returns standardized error responses with appropriate status codes and e
 
 - Run in development mode: `npm run dev`
 - Run in production mode: `npm start`
-
