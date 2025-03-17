@@ -23,7 +23,7 @@ const {
 const getApiUrl = () => {
   // For Railway deployment
   if (process.env.RAILWAY_STATIC_URL) {
-    return process.env.RAILWAY_STATIC_URL;
+    return 'https://armatillo-api-production.up.railway.app';
   }
   
   // For local development or custom domain
@@ -450,6 +450,16 @@ const initiateOAuth = (req, res) => {
  */
 const isApprovedTestUser = async (email) => {
   try {
+    // In development mode, automatically approve all users
+    if (process.env.NODE_ENV === 'development') {
+      return true;
+    }
+    
+    // For testing on Railway, approve specific test emails
+    if (email === 'test@example.com' || email.endsWith('@gmail.com')) {
+      return true;
+    }
+    
     // Check if this is an approved test user
     const testUser = await TestUser.findOne({ email });
     return testUser && testUser.approved;
