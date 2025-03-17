@@ -7,6 +7,13 @@ const axios = require('axios');
  */
 const getGoogleUserData = async (code) => {
   try {
+    // Get the callback URL based on environment
+    const callbackUrl = process.env.RAILWAY_STATIC_URL 
+      ? `https://armatillo-api-production.up.railway.app/api/auth/google-callback` 
+      : `${process.env.API_URL}/api/auth/google-callback`;
+    
+    console.log('Using callback URL:', callbackUrl);
+    
     // Exchange code for tokens
     const tokenResponse = await axios.post(
       'https://oauth2.googleapis.com/token',
@@ -14,7 +21,7 @@ const getGoogleUserData = async (code) => {
         code,
         client_id: process.env.GOOGLE_CLIENT_ID,
         client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        redirect_uri: `${process.env.API_URL}/api/auth/google-callback`,
+        redirect_uri: callbackUrl,
         grant_type: 'authorization_code'
       }
     );
