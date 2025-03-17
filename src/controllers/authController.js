@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const TestUser = require('../models/TestUser');
 const RefreshToken = require('../models/RefreshToken');
 const { getGoogleUserData } = require('../utils/googleOAuth');
 const { 
@@ -410,6 +411,48 @@ const initiateOAuth = (req, res) => {
 };
 
 /**
+ * Check if a user is an approved test user
+ * @param {string} email - The email to check
+ * @returns {Promise<boolean>} True if the user is an approved test user
+ */
+const isApprovedTestUser = async (email) => {
+  try {
+    // Check if this is an approved test user
+    const testUser = await TestUser.findOne({ email });
+    return testUser && testUser.approved;
+  } catch (error) {
+    console.error(`Error checking test user status for ${email}:`, error);
+    return false;
+  }
+};
+
+/**
+ * Record a pending test user request
+ * @param {string} email - The email to record
+ */
+const recordPendingTestUser = async (email) => {
+  try {
+    // Check if this email is already in the system
+    const existingUser = await TestUser.findOne({ email });
+    
+    if (!existingUser) {
+      // Create a new pending test user record
+      await TestUser.create({
+        email,
+        approved: false,
+        notes: 'Automatic registration request'
+      });
+      console.log(`Recorded pending test user: ${email}`);
+    } else if (!existingUser.approved) {
+      // User already exists but is not approved
+      console.log(`Test user already pending: ${email}`);
+    }
+  } catch (error) {
+    console.error(`Error recording pending test user for ${email}:`, error);
+  }
+};
+
+/**
  * @desc    Handle OAuth callback from provider
  * @route   GET /api/auth/google-callback
  * @access  Public
@@ -440,6 +483,32 @@ const handleOAuthCallback = async (req, res) => {
     
     // Exchange code for tokens and get user data
     const userData = await getGoogleUserData(code);
+    
+    // Check if this is an approved test user
+    const isApproved = await isApprovedTestUser(userData.email);
+    
+    // If not an approved test user, record the registration request and show message
+    if (!isApproved) {
+      // Record this user as a pending test user
+      await recordPendingTestUser(userData.email);
+      
+      // Is this a new user or returning unapproved user?
+      const existingUser = await User.findOne({ 
+        $or: [
+          { googleId: userData.googleId },
+          { email: userData.email }
+        ]
+      });
+      
+      const message = existingUser 
+        ? "Thank you for your interest. Your access is pending approval."
+        : "Thank you for registering. Your access request is pending approval.";
+        
+      // Redirect back with pending message
+      return res.redirect(
+        `armatillo://auth/pending?message=${encodeURIComponent(message)}`
+      );
+    }
     
     // Find or create user based on Google ID
     let user = await User.findOne({ googleId: userData.googleId });
@@ -650,6 +719,32 @@ const exchangeCodeForToken = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Check if a test user is approved
+ * @route   POST /api/auth/check-test-user
+ * @access  Public
+ */
+const checkTestUser = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    const isApproved = await isApprovedTestUser(email);
+    
+    res.json({ 
+      approved: isApproved,
+      // Only return a message if not approved
+      message: isApproved ? null : "Your access request is pending approval." 
+    });
+  } catch (error) {
+    console.error('Test user check error:', error);
+    res.status(500).json({ error: 'Failed to check test user status' });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -660,5 +755,6 @@ module.exports = {
   handleOAuthCallback,
   exchangeCodeForToken,
   reportSecurityEvent,
-  devLogin
+  devLogin,
+  checkTestUser
 };
