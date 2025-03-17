@@ -5,6 +5,7 @@ const session = require('express-session');
 const connectDB = require('./config/db');
 const instanceRoutes = require('./routes/instances');
 const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
 const { authErrorHandler } = require('./middleware/auth');
 
 dotenv.config();
@@ -30,6 +31,7 @@ app.use(session({
 // Routes
 app.use('/api/instances', instanceRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Auth error handling middleware
 app.use(authErrorHandler);
