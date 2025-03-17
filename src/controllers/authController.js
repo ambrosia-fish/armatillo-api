@@ -17,6 +17,20 @@ const {
 } = require('../utils/tokenUtils');
 
 /**
+ * Get the API URL based on environment
+ * @returns {string} The API URL
+ */
+const getApiUrl = () => {
+  // For Railway deployment
+  if (process.env.RAILWAY_STATIC_URL) {
+    return process.env.RAILWAY_STATIC_URL;
+  }
+  
+  // For local development or custom domain
+  return process.env.API_URL || 'http://localhost:3000';
+};
+
+/**
  * Generate access and refresh tokens
  * @param {string} userId - The user ID to encode in the token
  * @returns {Object} Object containing token, refreshToken and expiresIn
@@ -363,6 +377,8 @@ const reportSecurityEvent = async (req, res) => {
  */
 const initiateOAuth = (req, res) => {
   try {
+    console.log('Initiating OAuth flow');
+    
     // Get state from request (CSRF protection)
     const state = req.query.state;
     
@@ -373,6 +389,7 @@ const initiateOAuth = (req, res) => {
     // Store state in session
     if (state) {
       req.session.oauthState = state;
+      console.log(`Stored OAuth state: ${state}`);
     }
     
     // Store PKCE code challenge in session if provided
@@ -381,10 +398,23 @@ const initiateOAuth = (req, res) => {
       console.log(`Stored PKCE code challenge (${codeChallengeMethod}): ${codeChallenge}`);
     }
     
+    // Get the API URL for the callback
+    const apiUrl = getApiUrl();
+    
+    // For debugging, log callback URL
+    const callbackUrl = `${apiUrl}/api/auth/google-callback`;
+    console.log(`Using callback URL: ${callbackUrl}`);
+    
+    // Also check if Google Client ID is set
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      console.error('GOOGLE_CLIENT_ID environment variable is not set');
+      return res.status(500).json({ error: 'OAuth configuration error: Missing Google Client ID' });
+    }
+    
     // Build OAuth URL
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     authUrl.searchParams.append('client_id', process.env.GOOGLE_CLIENT_ID);
-    authUrl.searchParams.append('redirect_uri', `${process.env.API_URL}/api/auth/google-callback`);
+    authUrl.searchParams.append('redirect_uri', callbackUrl);
     authUrl.searchParams.append('response_type', 'code');
     authUrl.searchParams.append('scope', 'profile email');
     
@@ -401,12 +431,15 @@ const initiateOAuth = (req, res) => {
       }
     });
     
+    // Log the final URL for debugging
+    console.log(`Redirecting to OAuth URL: ${authUrl.toString()}`);
+    
     // Redirect to OAuth provider
     res.redirect(authUrl.toString());
   } catch (error) {
     console.error('OAuth initiation error:', error);
     // Return JSON error instead of redirecting to an error page
-    res.status(500).json({ error: 'Failed to initiate OAuth flow' });
+    res.status(500).json({ error: 'Failed to initiate OAuth flow', details: error.message });
   }
 };
 
@@ -459,6 +492,8 @@ const recordPendingTestUser = async (email) => {
  */
 const handleOAuthCallback = async (req, res) => {
   try {
+    console.log('Received OAuth callback');
+    
     // Get authorization code and state
     const { code, state } = req.query;
     
@@ -470,6 +505,10 @@ const handleOAuthCallback = async (req, res) => {
     if (state && req.session.oauthState) {
       if (state !== req.session.oauthState) {
         // Deep link back to the app with an error message
+        console.error('State mismatch', { 
+          providedState: state, 
+          expectedState: req.session.oauthState 
+        });
         return res.redirect(`armatillo://auth-error?error=invalid_state`);
       }
     }
@@ -482,6 +521,7 @@ const handleOAuthCallback = async (req, res) => {
     let usePkce = !!pkceData;
     
     // Exchange code for tokens and get user data
+    console.log('Exchanging code for user data');
     const userData = await getGoogleUserData(code);
     
     // Check if this is an approved test user
@@ -575,6 +615,8 @@ const handleOAuthCallback = async (req, res) => {
  */
 const exchangeCodeForToken = async (req, res) => {
   try {
+    console.log('Exchanging code for token');
+    
     const { code, code_verifier, redirect_uri } = req.body;
     
     if (!code) {
