@@ -28,14 +28,29 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS ?
 
 // Add production origins if in production
 if (process.env.NODE_ENV === 'production') {
-  allowedOrigins.push('https://app.armatillo.com');
+  allowedOrigins.push(
+    'https://app.armatillo.com', 
+    'armatillo://',
+    'exp://',
+    'https://armatillo-app.vercel.app'
+  );
 }
 
+// For development, log all CORS requests
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} from origin: ${req.headers.origin}`);
+  next();
+});
+
+// Use a more permissive CORS policy for debugging
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // Allow all origins for now to debug connection issues
+    callback(null, true);
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Rate limiting
