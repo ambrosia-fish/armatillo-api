@@ -10,7 +10,8 @@ const {
   handleOAuthCallback,
   exchangeCodeForToken,
   reportSecurityEvent,
-  devLogin
+  devLogin,
+  checkTestUser
 } = require('../controllers/authController');
 const { 
   authenticate, 
@@ -28,6 +29,9 @@ router.post('/token', exchangeCodeForToken);
 
 // Security reporting endpoint
 router.post('/report-security-event', securityIncidentHandler);
+
+// Test user check endpoint
+router.post('/check-test-user', checkTestUser);
 
 // OAuth routes
 router.get('/google-mobile', initiateOAuth);
