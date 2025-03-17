@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "seed": "node src/scripts/seedTestUsers.js",
+    "seed:clear": "node src/scripts/seedTestUsers.js --clear"
   },
   "keywords": [
     "express",
@@ -22,7 +24,9 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.18.3",
+    "express-rate-limit": "^7.1.5",
     "express-session": "^1.18.0",
+    "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.2.0"
   },
