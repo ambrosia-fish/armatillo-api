@@ -1,122 +1,95 @@
+const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { 
-  verifyToken,
-  extractTokenFromHeader,
-  blacklistToken 
-} = require('../utils/tokenUtils');
+const { extractTokenFromHeader, verifyToken } = require('../utils/tokenUtils');
 
 /**
- * Authentication middleware to protect routes
+ * Authentication middleware
  */
 const authenticate = async (req, res, next) => {
   try {
-    // Extract token from header
+    // Extract token from Authorization header
     const token = extractTokenFromHeader(req);
     
     if (!token) {
-      return res.status(401).json({ 
-        error: 'Not authorized, no token provided',
-        code: 'no_token'
-      });
+      return res.status(401).json({ error: 'No authentication token provided' });
     }
     
-    // Verify token including blacklist check
+    // Verify token
     const decoded = await verifyToken(token);
+    
     if (!decoded) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    
+    // Check token type
+    if (decoded.type === 'refresh') {
       return res.status(401).json({ 
-        error: 'Invalid or expired token',
-        code: 'invalid_token'
+        error: 'Invalid token type', 
+        message: 'Refresh tokens cannot be used for API authentication' 
       });
     }
     
-    // Get user from the token (excluding password)
-    const user = await User.findById(decoded.userId).select('-password');
+    // Get user
+    const user = await User.findById(decoded.userId);
+    
     if (!user) {
-      // If user doesn't exist, blacklist this token
-      await blacklistToken(token, 'access', { 
-        reason: 'token_for_nonexistent_user',
-        ipAddress: req.ip
-      });
-      
-      return res.status(401).json({ 
-        error: 'User not found',
-        code: 'user_not_found'
-      });
+      return res.status(401).json({ error: 'User not found' });
     }
     
-    // Attach user to request
+    // Set user and token info on request
     req.user = user;
-    
-    // Add token to request for potential blacklisting
     req.token = token;
+    req.tokenData = decoded;
     
     next();
   } catch (error) {
-    // Forward token errors to the error handler
-    next(error);
+    console.error('Authentication error:', error);
+    return res.status(401).json({ error: 'Authentication failed' });
   }
 };
 
 /**
- * Error handler middleware for authentication errors
+ * Error handler for authentication failures
  */
 const authErrorHandler = (err, req, res, next) => {
-  if (err.name === 'JsonWebTokenError') {
-    return res.status(401).json({ 
-      error: 'Invalid token', 
-      code: 'invalid_token' 
-    });
-  }
-  
-  if (err.name === 'TokenExpiredError') {
-    return res.status(401).json({ 
-      error: 'Token expired', 
-      code: 'token_expired' 
-    });
+  if (err.name === 'UnauthorizedError') {
+    return res.status(401).json({ error: 'Invalid token' });
   }
   
   next(err);
 };
 
 /**
- * Middleware for handling security incident reports
+ * Security incident handler middleware
  */
-const securityIncidentHandler = async (req, res, next) => {
-  try {
-    const { reason, tokenFingerprint } = req.body;
-    
-    if (!reason) {
-      return res.status(400).json({ error: 'Reason is required' });
-    }
-    
-    // Log security incident
-    console.warn(`Security incident reported: ${reason}`);
-    console.warn(`IP: ${req.ip}`);
-    
-    // Store incident details in database (you could add a SecurityIncident model)
-    // In a production environment, you would also trigger alerts
-    
-    // If token fingerprint is provided, add it to the blacklist
-    if (tokenFingerprint) {
-      // Note: This doesn't use blacklistToken function since we already have the fingerprint
-      const BlacklistedToken = require('../models/BlacklistedToken');
-      await BlacklistedToken.create({
-        tokenFingerprint,
-        tokenType: 'access',
-        reason,
-        ipAddress: req.ip
-      });
-    }
-    
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error('Error handling security incident:', error);
-    res.status(500).json({ error: 'Failed to process security incident' });
-  }
+const securityIncidentHandler = (req, res, next) => {
+  // Log the IP address for any security-related endpoints
+  console.log(`Security endpoint accessed from ${req.ip}`);
+  
+  // Continue with request
+  next();
 };
 
-module.exports = { 
-  authenticate, 
+/**
+ * Admin check middleware - only allows admins to access certain routes
+ */
+const adminOnly = (req, res, next) => {
+  // Check if user exists and is an admin
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  // Check admin flag on user
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  next();
+};
+
+module.exports = {
+  authenticate,
   authErrorHandler,
-  securityIncidentHandler
+  securityIncidentHandler,
+  adminOnly
 };
