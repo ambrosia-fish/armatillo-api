@@ -11,6 +11,8 @@ const InstanceSchema = new mongoose.Schema({
   selectedThoughts: { type: [String] },
   notes: { type: String },
   userId: { type: String },
+  userEmail: { type: String },
+  userName: { type: String },
   createdAt: { type: Date, default: Date.now }
 });
 
