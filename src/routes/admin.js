@@ -23,8 +23,8 @@ router.post('/test-users/:id/approve', authenticate, adminOnly, async (req, res)
       return res.status(404).json({ error: 'Test user not found' });
     }
     
-    testUser.approved = true;
-    testUser.notes = `Approved by admin ${req.user.email} on ${new Date().toISOString()}`;
+    testUser.status = 'approved';
+    testUser.notes = `${testUser.notes || ''}\nApproved by admin ${req.user.email} on ${new Date().toISOString()}`;
     await testUser.save();
     
     res.json(testUser);
@@ -37,13 +37,17 @@ router.post('/test-users/:id/approve', authenticate, adminOnly, async (req, res)
 // Reject a test user
 router.post('/test-users/:id/reject', authenticate, adminOnly, async (req, res) => {
   try {
-    const testUser = await TestUser.findByIdAndDelete(req.params.id);
+    const testUser = await TestUser.findById(req.params.id);
     
     if (!testUser) {
       return res.status(404).json({ error: 'Test user not found' });
     }
     
-    res.json({ success: true, message: 'Test user rejected and removed' });
+    testUser.status = 'rejected';
+    testUser.notes = `${testUser.notes || ''}\nRejected by admin ${req.user.email} on ${new Date().toISOString()}`;
+    await testUser.save();
+    
+    res.json(testUser);
   } catch (error) {
     console.error('Error rejecting test user:', error);
     res.status(500).json({ error: 'Failed to reject test user' });
@@ -53,7 +57,7 @@ router.post('/test-users/:id/reject', authenticate, adminOnly, async (req, res) 
 // Add a new test user
 router.post('/test-users', authenticate, adminOnly, async (req, res) => {
   try {
-    const { email, approved, notes } = req.body;
+    const { email, status, notes, name } = req.body;
     
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
@@ -68,7 +72,8 @@ router.post('/test-users', authenticate, adminOnly, async (req, res) => {
     // Create test user
     const testUser = await TestUser.create({
       email,
-      approved: approved !== undefined ? approved : true,
+      status: status || 'approved',
+      name: name || '',
       notes: notes || `Added by admin ${req.user.email}`
     });
     
