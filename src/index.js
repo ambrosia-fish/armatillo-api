@@ -31,6 +31,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS ?
 if (process.env.NODE_ENV === 'production') {
   allowedOrigins.push(
     'https://app.armatillo.com', 
+    'https://dev.armatillo.com',  // Added dev domain
     'armatillo://',
     'exp://',
     'https://armatillo-app.vercel.app'
