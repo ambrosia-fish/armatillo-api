@@ -3,9 +3,13 @@ const Instance = require('../models/Instance');
 // Get all instances for the logged-in user
 exports.getInstances = async (req, res) => {
   try {
-    // Find instances associated with the current user
-    const instances = await Instance.find({ userId: req.user._id })
-      .sort({ createdAt: -1 });
+    // Find instances associated with the current user's email or ID
+    const instances = await Instance.find({
+      $or: [
+        { userId: req.user._id.toString() },
+        { userEmail: req.user.email }
+      ]
+    }).sort({ createdAt: -1 });
     
     res.status(200).json(instances);
   } catch (error) {
@@ -18,7 +22,10 @@ exports.getInstance = async (req, res) => {
   try {
     const instance = await Instance.findOne({
       _id: req.params.id,
-      userId: req.user._id
+      $or: [
+        { userId: req.user._id.toString() },
+        { userEmail: req.user.email }
+      ]
     });
     
     if (!instance) {
@@ -35,10 +42,12 @@ exports.getInstance = async (req, res) => {
 // Create an instance
 exports.createInstance = async (req, res) => {
   try {
-    // Create a new instance with the user ID from the authenticated user
+    // Create a new instance with the user information from the authenticated user
     const instanceData = {
       ...req.body,
-      userId: req.user._id.toString() // Ensure user ID is added/overwritten
+      userId: req.user._id.toString(),
+      userEmail: req.user.email,
+      userName: req.user.displayName || req.user.name || req.user.email.split('@')[0]
     };
     
     const instance = new Instance(instanceData);
@@ -55,7 +64,13 @@ exports.updateInstance = async (req, res) => {
   try {
     // Find and update instance, but only if it belongs to the current user
     const instance = await Instance.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user._id },
+      {
+        _id: req.params.id,
+        $or: [
+          { userId: req.user._id.toString() },
+          { userEmail: req.user.email }
+        ]
+      },
       req.body,
       { new: true, runValidators: true }
     );
@@ -77,7 +92,10 @@ exports.deleteInstance = async (req, res) => {
     // Delete instance, but only if it belongs to the current user
     const instance = await Instance.findOneAndDelete({
       _id: req.params.id,
-      userId: req.user._id
+      $or: [
+        { userId: req.user._id.toString() },
+        { userEmail: req.user.email }
+      ]
     });
     
     if (!instance) {
