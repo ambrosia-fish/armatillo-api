@@ -10,9 +10,10 @@ const InstanceSchema = new mongoose.Schema({
   selectedSensations: { type: [String] },
   selectedThoughts: { type: [String] },
   notes: { type: String },
-  userId: { type: String },
+  userId: { type: String },  // Legacy field
   userEmail: { type: String },
   userName: { type: String },
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },  // Direct reference to User model
   createdAt: { type: Date, default: Date.now }
 });
 
