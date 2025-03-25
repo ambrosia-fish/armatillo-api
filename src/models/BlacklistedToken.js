@@ -1,46 +1,15 @@
 const mongoose = require('mongoose');
 
 /**
- * BlacklistedToken schema for storing tokens that are no longer valid
- * Used for token revocation, particularly in security incidents
+ * This model is no longer in use - retained for backward compatibility
+ * A simplified model without the full security features
  */
 const BlacklistedTokenSchema = new mongoose.Schema({
-  // Store token fingerprint (SHA-256 hash) instead of the actual token
   tokenFingerprint: { 
     type: String, 
     required: true,
     unique: true,
     index: true
-  },
-  
-  // Type of token that was blacklisted
-  tokenType: {
-    type: String,
-    enum: ['access', 'refresh', 'auth_code'],
-    required: true
-  },
-  
-  // User ID associated with the token, if known
-  userId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User',
-    index: true
-  },
-  
-  // Reason for blacklisting (security incident, logout, etc.)
-  reason: { 
-    type: String,
-    required: true
-  },
-  
-  // IP address that initiated the blacklisting (if available)
-  ipAddress: {
-    type: String
-  },
-  
-  // Device info when available
-  deviceInfo: {
-    type: String
   },
   
   // When the token was blacklisted
@@ -50,7 +19,7 @@ const BlacklistedTokenSchema = new mongoose.Schema({
     index: true
   },
   
-  // Optional expiry for cleanup purposes (can be set to token's original expiry)
+  // Optional expiry for cleanup purposes
   expiresAt: {
     type: Date,
     default: function() {
