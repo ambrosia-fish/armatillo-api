@@ -3,14 +3,8 @@ const Instance = require('../models/Instance');
 // Get all instances for the logged-in user
 exports.getInstances = async (req, res) => {
   try {
-    // Find instances associated with the current user using the proper ObjectId reference
-    const instances = await Instance.find({
-      $or: [
-        { user_id: req.user._id },  // Primary method using direct ObjectId reference
-        { userId: req.user._id.toString() },  // Legacy support
-        { userEmail: req.user.email }  // Secondary method using email
-      ]
-    }).sort({ createdAt: -1 });
+    // Find instances associated with the current user using ObjectId reference
+    const instances = await Instance.find({ user_id: req.user._id }).sort({ createdAt: -1 });
     
     res.status(200).json(instances);
   } catch (error) {
@@ -23,11 +17,7 @@ exports.getInstance = async (req, res) => {
   try {
     const instance = await Instance.findOne({
       _id: req.params.id,
-      $or: [
-        { user_id: req.user._id },  // Primary method using direct ObjectId reference
-        { userId: req.user._id.toString() },  // Legacy support
-        { userEmail: req.user.email }  // Secondary method using email
-      ]
+      user_id: req.user._id
     });
     
     if (!instance) {
@@ -47,9 +37,7 @@ exports.createInstance = async (req, res) => {
     // Create a new instance with the user information from the authenticated user
     const instanceData = {
       ...req.body,
-      user_id: req.user._id,  // Store direct MongoDB ObjectId reference
-      userId: req.user._id.toString(),  // Legacy: Store as string for backward compatibility
-      userEmail: req.user.email,
+      user_id: req.user._id,  // Store MongoDB ObjectId reference
       userName: req.user.displayName || req.user.name || req.user.email.split('@')[0]
     };
     
@@ -69,11 +57,7 @@ exports.updateInstance = async (req, res) => {
     const instance = await Instance.findOneAndUpdate(
       {
         _id: req.params.id,
-        $or: [
-          { user_id: req.user._id },  // Primary method using direct ObjectId reference
-          { userId: req.user._id.toString() },  // Legacy support
-          { userEmail: req.user.email }  // Secondary method using email
-        ]
+        user_id: req.user._id
       },
       req.body,
       { new: true, runValidators: true }
@@ -96,11 +80,7 @@ exports.deleteInstance = async (req, res) => {
     // Delete instance, but only if it belongs to the current user
     const instance = await Instance.findOneAndDelete({
       _id: req.params.id,
-      $or: [
-        { user_id: req.user._id },  // Primary method using direct ObjectId reference
-        { userId: req.user._id.toString() },  // Legacy support
-        { userEmail: req.user.email }  // Secondary method using email
-      ]
+      user_id: req.user._id
     });
     
     if (!instance) {
