@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { logger } = require('./errorHandler');
 
 /**
  * Exchange authorization code for Google OAuth tokens
@@ -7,13 +8,11 @@ const axios = require('axios');
  */
 const getGoogleUserData = async (code) => {
   try {
-    // Get the API URL from environment variables
     const apiUrl = process.env.API_URL || 'http://localhost:3000';
     const callbackUrl = `${apiUrl}/api/auth/google-callback`;
     
-    console.log('Using callback URL:', callbackUrl);
+    logger.info('Using Google OAuth callback URL', { callbackUrl });
     
-    // Exchange code for tokens
     const tokenResponse = await axios.post(
       'https://oauth2.googleapis.com/token',
       {
@@ -27,7 +26,6 @@ const getGoogleUserData = async (code) => {
 
     const { access_token, id_token } = tokenResponse.data;
 
-    // Use the access token to get user profile
     const userInfoResponse = await axios.get(
       'https://www.googleapis.com/oauth2/v2/userinfo',
       {
@@ -35,14 +33,16 @@ const getGoogleUserData = async (code) => {
       }
     );
 
-    // Return user data
     return {
       googleId: userInfoResponse.data.id,
       email: userInfoResponse.data.email,
       displayName: userInfoResponse.data.name || userInfoResponse.data.email.split('@')[0]
     };
   } catch (error) {
-    console.error('Google OAuth error:', error.response?.data || error.message);
+    logger.error('Google OAuth Authentication Error', {
+      message: error.response?.data || error.message,
+      stack: error.stack
+    });
     throw new Error('Failed to authenticate with Google');
   }
 };
