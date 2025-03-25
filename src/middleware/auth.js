@@ -21,14 +21,6 @@ const authenticate = async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid token' });
     }
     
-    // Check token type
-    if (decoded.type === 'refresh') {
-      return res.status(401).json({ 
-        error: 'Invalid token type', 
-        message: 'Refresh tokens cannot be used for API authentication' 
-      });
-    }
-    
     // Get user
     const user = await User.findById(decoded.userId);
     
@@ -60,17 +52,6 @@ const authErrorHandler = (err, req, res, next) => {
 };
 
 /**
- * Security incident handler middleware
- */
-const securityIncidentHandler = (req, res, next) => {
-  // Log the IP address for any security-related endpoints
-  console.log(`Security endpoint accessed from ${req.ip}`);
-  
-  // Continue with request
-  next();
-};
-
-/**
  * Admin check middleware - only allows admins to access certain routes
  */
 const adminOnly = (req, res, next) => {
@@ -90,6 +71,5 @@ const adminOnly = (req, res, next) => {
 module.exports = {
   authenticate,
   authErrorHandler,
-  securityIncidentHandler,
   adminOnly
 };
