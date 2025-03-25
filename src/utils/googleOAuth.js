@@ -7,10 +7,9 @@ const axios = require('axios');
  */
 const getGoogleUserData = async (code) => {
   try {
-    // Get the callback URL based on environment
-    const callbackUrl = process.env.RAILWAY_STATIC_URL 
-      ? `https://armatillo-api-production.up.railway.app/api/auth/google-callback` 
-      : `${process.env.API_URL}/api/auth/google-callback`;
+    // Get the API URL from environment variables
+    const apiUrl = process.env.API_URL || 'http://localhost:3000';
+    const callbackUrl = `${apiUrl}/api/auth/google-callback`;
     
     console.log('Using callback URL:', callbackUrl);
     
