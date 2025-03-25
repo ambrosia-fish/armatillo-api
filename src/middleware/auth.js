@@ -3,7 +3,7 @@ const User = require('../models/User');
 const { extractTokenFromHeader, verifyToken } = require('../utils/tokenUtils');
 
 /**
- * Authentication middleware
+ * Basic authentication middleware
  */
 const authenticate = async (req, res, next) => {
   try {
@@ -31,7 +31,6 @@ const authenticate = async (req, res, next) => {
     // Set user and token info on request
     req.user = user;
     req.token = token;
-    req.tokenData = decoded;
     
     next();
   } catch (error) {
@@ -41,7 +40,7 @@ const authenticate = async (req, res, next) => {
 };
 
 /**
- * Error handler for authentication failures
+ * Simple error handler for authentication failures
  */
 const authErrorHandler = (err, req, res, next) => {
   if (err.name === 'UnauthorizedError') {
@@ -52,16 +51,10 @@ const authErrorHandler = (err, req, res, next) => {
 };
 
 /**
- * Admin check middleware - only allows admins to access certain routes
+ * Admin check middleware
  */
 const adminOnly = (req, res, next) => {
-  // Check if user exists and is an admin
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  
-  // Check admin flag on user
-  if (!req.user.isAdmin) {
+  if (!req.user || !req.user.isAdmin) {
     return res.status(403).json({ error: 'Admin access required' });
   }
   
