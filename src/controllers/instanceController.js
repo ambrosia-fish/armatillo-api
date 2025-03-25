@@ -1,19 +1,16 @@
 const Instance = require('../models/Instance');
+const { AppError } = require('../utils/errorHandler');
 
-// Get all instances for the logged-in user
-exports.getInstances = async (req, res) => {
+exports.getInstances = async (req, res, next) => {
   try {
-    // Find instances associated with the current user using ObjectId reference
     const instances = await Instance.find({ user_id: req.user._id }).sort({ createdAt: -1 });
-    
     res.status(200).json(instances);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(new AppError('Failed to retrieve instances', 500));
   }
 };
 
-// Get single instance (only if it belongs to the logged-in user)
-exports.getInstance = async (req, res) => {
+exports.getInstance = async (req, res, next) => {
   try {
     const instance = await Instance.findOne({
       _id: req.params.id,
@@ -21,23 +18,20 @@ exports.getInstance = async (req, res) => {
     });
     
     if (!instance) {
-      res.status(404).json({ message: 'Instance not found' });
-      return;
+      return next(new AppError('Instance not found', 404));
     }
     
     res.status(200).json(instance);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(new AppError('Failed to retrieve instance', 500));
   }
 };
 
-// Create an instance
-exports.createInstance = async (req, res) => {
+exports.createInstance = async (req, res, next) => {
   try {
-    // Create a new instance with the user information from the authenticated user
     const instanceData = {
       ...req.body,
-      user_id: req.user._id,  // Store MongoDB ObjectId reference
+      user_id: req.user._id,
       userName: req.user.displayName || req.user.name || req.user.email.split('@')[0]
     };
     
@@ -46,14 +40,12 @@ exports.createInstance = async (req, res) => {
     
     res.status(201).json(savedInstance);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    next(new AppError('Failed to create instance', 400));
   }
 };
 
-// Update an instance (only if it belongs to the logged-in user)
-exports.updateInstance = async (req, res) => {
+exports.updateInstance = async (req, res, next) => {
   try {
-    // Find and update instance, but only if it belongs to the current user
     const instance = await Instance.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -64,32 +56,28 @@ exports.updateInstance = async (req, res) => {
     );
     
     if (!instance) {
-      res.status(404).json({ message: 'Instance not found' });
-      return;
+      return next(new AppError('Instance not found', 404));
     }
     
     res.status(200).json(instance);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    next(new AppError('Failed to update instance', 400));
   }
 };
 
-// Delete an instance (only if it belongs to the logged-in user)
-exports.deleteInstance = async (req, res) => {
+exports.deleteInstance = async (req, res, next) => {
   try {
-    // Delete instance, but only if it belongs to the current user
     const instance = await Instance.findOneAndDelete({
       _id: req.params.id,
       user_id: req.user._id
     });
     
     if (!instance) {
-      res.status(404).json({ message: 'Instance not found' });
-      return;
+      return next(new AppError('Instance not found', 404));
     }
     
     res.status(200).json({ message: 'Instance deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(new AppError('Failed to delete instance', 500));
   }
 };
