@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, adminOnly } = require('../middleware/auth');
+const { AppError } = require('../utils/errorHandler');
 
 // Admin dashboard
-router.get('/dashboard', authenticate, adminOnly, async (req, res) => {
+router.get('/dashboard', authenticate, adminOnly, async (req, res, next) => {
   try {
     res.json({
       message: 'Welcome to the admin dashboard',
@@ -13,8 +14,7 @@ router.get('/dashboard', authenticate, adminOnly, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error accessing admin dashboard:', error);
-    res.status(500).json({ error: 'Failed to load admin dashboard' });
+    next(new AppError('Failed to load admin dashboard', 500));
   }
 });
 
