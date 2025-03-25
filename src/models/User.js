@@ -22,7 +22,6 @@ const UserSchema = new mongoose.Schema({
   },
   googleId: {
     type: String,
-    unique: true,
     sparse: true
   },
   isAdmin: {
@@ -34,6 +33,9 @@ const UserSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+// Create compound index for googleId to ensure uniqueness only for non-null values
+UserSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 
 // Hash password before saving
 UserSchema.pre('save', async function(next) {
