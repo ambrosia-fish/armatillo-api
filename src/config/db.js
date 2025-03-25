@@ -1,8 +1,21 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const { logger } = require('../utils/errorHandler');
+const winston = require('winston');
 
 dotenv.config();
+
+// Create a logger if not already created in errorHandler
+const logger = winston.createLogger({
+  level: 'error',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'error.log' })
+  ]
+});
 
 const connectDB = async () => {
   try {
