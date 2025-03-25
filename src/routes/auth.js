@@ -8,7 +8,6 @@ const {
   getCurrentUser,
   initiateOAuth,
   handleOAuthCallback,
-  exchangeCodeForToken,
   devLogin,
   checkTestUser
 } = require('../controllers/authController');
@@ -22,9 +21,6 @@ router.post('/register', register);
 router.post('/login', login);
 router.post('/refresh', refreshToken);
 
-// PKCE token exchange endpoint
-router.post('/token', exchangeCodeForToken);
-
 // Test user check endpoint
 router.post('/check-test-user', checkTestUser);
 
@@ -36,7 +32,7 @@ router.get('/google-callback', handleOAuthCallback);
 router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getCurrentUser);
 
-// Development-only routes (only available in development environment)
+// Development-only routes
 if (process.env.NODE_ENV === 'development') {
   router.get('/dev-login', devLogin);
 }
