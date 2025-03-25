@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+const { logger } = require('../utils/errorHandler');
 
 dotenv.config();
 
@@ -10,9 +11,12 @@ const connectDB = async () => {
     }
     
     const conn = await mongoose.connect(process.env.MONGO_URI);
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    logger.info(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    console.error(`Error: ${error.message}`);
+    logger.error('MongoDB Connection Error', { 
+      message: error.message,
+      stack: error.stack
+    });
     process.exit(1);
   }
 };
