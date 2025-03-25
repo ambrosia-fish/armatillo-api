@@ -16,36 +16,8 @@ connectDB();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS configuration
-const allowedOrigins = [
-  'http://localhost:3000', 
-  'http://localhost:19000', 
-  'http://localhost:19006',
-  'https://app.armatillo.com', 
-  'https://dev.armatillo.com',
-  'armatillo://',
-  'exp://',
-  'https://armatillo-app.vercel.app'
-];
-
-// Configure CORS
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps)
-    if (!origin) return callback(null, true);
-    
-    // Check if the origin is in the allowed list
-    if (allowedOrigins.indexOf(origin) === -1) {
-      console.log(`Blocked request from disallowed origin: ${origin}`);
-      return callback(null, false);
-    }
-    
-    return callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+// Enable CORS for all routes
+app.use(cors());
 
 // Log requests
 app.use((req, res, next) => {
@@ -60,12 +32,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'armatillo_session_secret', 
   resave: false,
-  saveUninitialized: false,
-  cookie: { 
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    sameSite: 'lax'
-  }
+  saveUninitialized: false
 }));
 
 // Routes
