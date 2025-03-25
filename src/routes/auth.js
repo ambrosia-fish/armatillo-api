@@ -9,14 +9,12 @@ const {
   initiateOAuth,
   handleOAuthCallback,
   exchangeCodeForToken,
-  reportSecurityEvent,
   devLogin,
   checkTestUser
 } = require('../controllers/authController');
 const { 
-  authenticate, 
-  authErrorHandler,
-  securityIncidentHandler
+  authenticate,
+  authErrorHandler
 } = require('../middleware/auth');
 
 // Public routes
@@ -26,9 +24,6 @@ router.post('/refresh', refreshToken);
 
 // PKCE token exchange endpoint
 router.post('/token', exchangeCodeForToken);
-
-// Security reporting endpoint
-router.post('/report-security-event', reportSecurityEvent);
 
 // Test user check endpoint
 router.post('/check-test-user', checkTestUser);
