@@ -1,61 +1,40 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { AppError } = require('../utils/errorHandler');
 const { extractTokenFromHeader, verifyToken } = require('../utils/tokenUtils');
 
-/**
- * Basic authentication middleware
- */
 const authenticate = async (req, res, next) => {
   try {
-    // Extract token from Authorization header
     const token = extractTokenFromHeader(req);
     
     if (!token) {
-      return res.status(401).json({ error: 'No authentication token provided' });
+      return next(new AppError('No authentication token provided', 401));
     }
     
-    // Verify token
     const decoded = await verifyToken(token);
     
     if (!decoded) {
-      return res.status(401).json({ error: 'Invalid token' });
+      return next(new AppError('Invalid token', 401));
     }
     
-    // Get user
     const user = await User.findById(decoded.userId);
     
     if (!user) {
-      return res.status(401).json({ error: 'User not found' });
+      return next(new AppError('User not found', 401));
     }
     
-    // Set user and token info on request
     req.user = user;
     req.token = token;
     
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
-    return res.status(401).json({ error: 'Authentication failed' });
+    next(new AppError('Authentication failed', 401));
   }
 };
 
-/**
- * Simple error handler for authentication failures
- */
-const authErrorHandler = (err, req, res, next) => {
-  if (err.name === 'UnauthorizedError') {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-  
-  next(err);
-};
-
-/**
- * Admin check middleware
- */
 const adminOnly = (req, res, next) => {
   if (!req.user || !req.user.isAdmin) {
-    return res.status(403).json({ error: 'Admin access required' });
+    return next(new AppError('Admin access required', 403));
   }
   
   next();
@@ -63,6 +42,5 @@ const adminOnly = (req, res, next) => {
 
 module.exports = {
   authenticate,
-  authErrorHandler,
   adminOnly
 };
