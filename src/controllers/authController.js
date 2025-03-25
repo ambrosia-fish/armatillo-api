@@ -11,7 +11,6 @@ const {
 } = require('../utils/pkceUtils');
 const {
   generateToken,
-  blacklistToken,
   verifyToken,
   extractTokenFromHeader
 } = require('../utils/tokenUtils');
@@ -61,23 +60,16 @@ const devLogin = async (req, res) => {
       return res.status(404).json({ error: 'Not found' });
     }
     
-    console.log('Using development login endpoint');
-    
     // Find or create a development user
     let user = await User.findOne({ email: 'dev@example.com' });
     
     if (!user) {
-      console.log('Creating development user');
-      
       // Create a dev user
       user = await User.create({
         email: 'dev@example.com',
         displayName: 'Development User',
-        // Use a secure random password even for dev users
         password: jwt.sign({ random: Math.random() }, process.env.JWT_SECRET)
       });
-    } else {
-      console.log('Development user already exists');
     }
     
     // Generate tokens
@@ -98,9 +90,7 @@ const devLogin = async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
-        displayName: user.displayName,
-        firstName: 'Dev',
-        lastName: 'User'
+        displayName: user.displayName
       }
     });
   } catch (error) {
@@ -230,26 +220,12 @@ const refreshToken = async (req, res) => {
     
     // Check if it's actually a refresh token
     if (decoded.type !== 'refresh') {
-      // If not a refresh token, blacklist it as it might be an access token misuse
-      await blacklistToken(requestToken, 'access', { 
-        userId: decoded.userId, 
-        reason: 'access_token_used_as_refresh',
-        ipAddress: req.ip
-      });
-      
       return res.status(401).json({ error: 'Invalid token type' });
     }
     
     // Check if token exists in database
     const tokenDoc = await RefreshToken.findOne({ token: requestToken });
     if (!tokenDoc) {
-      // If token not found in db but passes verification, blacklist it
-      await blacklistToken(requestToken, 'refresh', { 
-        userId: decoded.userId, 
-        reason: 'refresh_token_not_in_database',
-        ipAddress: req.ip
-      });
-      
       return res.status(401).json({ error: 'Refresh token not found' });
     }
     
@@ -261,13 +237,6 @@ const refreshToken = async (req, res) => {
     await RefreshToken.create({
       userId: decoded.userId,
       token: newRefreshToken
-    });
-    
-    // Blacklist the old refresh token to prevent reuse
-    await blacklistToken(requestToken, 'refresh', { 
-      userId: decoded.userId, 
-      reason: 'token_rotation',
-      ipAddress: req.ip
     });
     
     // Return new tokens
@@ -290,30 +259,12 @@ const refreshToken = async (req, res) => {
  */
 const logout = async (req, res) => {
   try {
-    // Get tokens
-    const accessToken = req.token; // Added by auth middleware
+    // Get refresh token
     const { refreshToken } = req.body;
     
-    // Blacklist the access token
-    if (accessToken) {
-      await blacklistToken(accessToken, 'access', { 
-        userId: req.user._id,
-        reason: 'user_logout',
-        ipAddress: req.ip
-      });
-    }
-    
-    // Blacklist and remove the refresh token
+    // Remove refresh token from database if provided
     if (refreshToken) {
-      // Remove refresh token from database if provided
       await RefreshToken.deleteOne({ token: refreshToken });
-      
-      // Blacklist the refresh token
-      await blacklistToken(refreshToken, 'refresh', { 
-        userId: req.user._id,
-        reason: 'user_logout',
-        ipAddress: req.ip
-      });
     }
     
     res.json({ success: true, message: 'Logged out successfully' });
@@ -330,7 +281,6 @@ const logout = async (req, res) => {
  */
 const getCurrentUser = async (req, res) => {
   try {
-    console.log('GET /api/auth/me from origin:', req.get('origin'));
     const user = await User.findById(req.user._id);
     
     res.json({
@@ -345,41 +295,12 @@ const getCurrentUser = async (req, res) => {
 };
 
 /**
- * @desc    Handle security events reported by clients
- * @route   POST /api/auth/report-security-event
- * @access  Public
- */
-const reportSecurityEvent = async (req, res) => {
-  try {
-    const { reason, tokenFingerprint, deviceInfo } = req.body;
-    
-    if (!reason || !tokenFingerprint) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-    
-    console.warn(`Security event reported from ${req.ip}: ${reason}`);
-    
-    // In a production app, this would trigger security alerts
-    // and potentially add the IP to a watch list
-    
-    // Return success to avoid leaking information
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error('Error processing security event:', error);
-    // Still return success to avoid leaking information
-    res.status(200).json({ success: true });
-  }
-};
-
-/**
  * @desc    Handle OAuth initiation for mobile app
  * @route   GET /api/auth/google-mobile
  * @access  Public
  */
 const initiateOAuth = (req, res) => {
   try {
-    console.log('Initiating OAuth flow');
-    
     // Get state from request (CSRF protection)
     const state = req.query.state;
     
@@ -393,31 +314,24 @@ const initiateOAuth = (req, res) => {
     // Store state in session
     if (state) {
       req.session.oauthState = state;
-      console.log(`Stored OAuth state: ${state}`);
     }
     
     // Store PKCE code challenge in session if provided
     if (codeChallenge) {
       storeCodeChallenge(req, codeChallenge, codeChallengeMethod);
-      console.log(`Stored PKCE code challenge (${codeChallengeMethod}): ${codeChallenge}`);
     }
     
     // Store redirect URI if provided
     if (redirectUri) {
       req.session.redirectUri = redirectUri;
-      console.log(`Stored redirect URI: ${redirectUri}`);
     }
     
     // Get the API URL for the callback
     const apiUrl = getApiUrl();
-    
-    // For debugging, log callback URL
     const callbackUrl = `${apiUrl}/api/auth/google-callback`;
-    console.log(`Using callback URL: ${callbackUrl}`);
     
-    // Also check if Google Client ID is set
+    // Check if Google Client ID is set
     if (!process.env.GOOGLE_CLIENT_ID) {
-      console.error('GOOGLE_CLIENT_ID environment variable is not set');
       return res.status(500).json({ error: 'OAuth configuration error: Missing Google Client ID' });
     }
     
@@ -441,14 +355,10 @@ const initiateOAuth = (req, res) => {
       }
     });
     
-    // Log the final URL for debugging
-    console.log(`Redirecting to OAuth URL: ${authUrl.toString()}`);
-    
     // Redirect to OAuth provider
     res.redirect(authUrl.toString());
   } catch (error) {
     console.error('OAuth initiation error:', error);
-    // Return JSON error instead of redirecting to an error page
     res.status(500).json({ error: 'Failed to initiate OAuth flow', details: error.message });
   }
 };
@@ -465,7 +375,7 @@ const isApprovedTestUser = async (email) => {
       return true;
     }
     
-    // For testing on Railway, approve specific test emails
+    // For testing, approve specific test emails
     if (email === 'test@example.com' || email.endsWith('@gmail.com')) {
       return true;
     }
@@ -495,10 +405,6 @@ const recordPendingTestUser = async (email) => {
         status: 'pending',
         notes: 'Automatic registration request'
       });
-      console.log(`Recorded pending test user: ${email}`);
-    } else if (existingUser.status !== 'approved') {
-      // User already exists but is not approved
-      console.log(`Test user already pending: ${email}`);
     }
   } catch (error) {
     console.error(`Error recording pending test user for ${email}:`, error);
@@ -512,8 +418,6 @@ const recordPendingTestUser = async (email) => {
  */
 const handleOAuthCallback = async (req, res) => {
   try {
-    console.log('Received OAuth callback');
-    
     // Get authorization code and state
     const { code, state } = req.query;
     
@@ -524,18 +428,12 @@ const handleOAuthCallback = async (req, res) => {
     // Verify state parameter for CSRF protection
     if (state && req.session.oauthState) {
       if (state !== req.session.oauthState) {
-        // Deep link back to the app with an error message
-        console.error('State mismatch', { 
-          providedState: state, 
-          expectedState: req.session.oauthState 
-        });
         return res.redirect(`armatillo://auth-error?error=invalid_state`);
       }
     }
     
     // Get stored redirect URI
     const redirectUri = req.session.redirectUri || 'armatillo://auth/callback';
-    console.log('Using redirect URI:', redirectUri);
     
     // Clear stored state
     req.session.oauthState = null;
@@ -544,10 +442,7 @@ const handleOAuthCallback = async (req, res) => {
     const pkceData = getStoredCodeChallenge(req);
     let usePkce = !!pkceData;
     
-    console.log('PKCE flow enabled:', usePkce);
-    
     // Exchange code for tokens and get user data
-    console.log('Exchanging code for user data');
     const userData = await getGoogleUserData(code);
     
     // Check if this is an approved test user
@@ -610,7 +505,6 @@ const handleOAuthCallback = async (req, res) => {
     
     if (usePkce) {
       // Store a temporary auth code for the PKCE token exchange
-      // In a real implementation, you'd store this with an expiration and link to the user
       req.session.tempAuthCode = {
         code: jwt.sign({ userId: user._id, type: 'auth_code' }, process.env.JWT_SECRET, { expiresIn: '5m' }),
         userId: user._id.toString(),
@@ -618,13 +512,11 @@ const handleOAuthCallback = async (req, res) => {
       };
       
       // Redirect back to the app with the authorization code
-      console.log('Redirecting with authorization code to:', redirectUri.replace(/\/callback$/, '/callback'));
       return res.redirect(
         `${redirectUri.includes('://') ? redirectUri : 'armatillo://auth/callback'}?code=${req.session.tempAuthCode.code}&state=${state}`
       );
     } else {
       // Legacy flow - redirect with tokens directly
-      console.log('Using legacy flow with direct token in URL');
       return res.redirect(
         `${redirectUri.includes('://') ? redirectUri : 'armatillo://auth/callback'}?token=${token}&refresh_token=${refreshToken}&expires_in=${expiresIn}&state=${state}`
       );
@@ -643,8 +535,6 @@ const handleOAuthCallback = async (req, res) => {
  */
 const exchangeCodeForToken = async (req, res) => {
   try {
-    console.log('Exchanging code for token:', req.body);
-    
     const { code, code_verifier, redirect_uri } = req.body;
     
     if (!code) {
@@ -663,22 +553,12 @@ const exchangeCodeForToken = async (req, res) => {
     
     // Handle special case for testing with mock PKCE implementation
     const isMockPKCE = code_verifier === 'testtesttesttesttesttesttesttesttesttesttesttesttesttesttest';
-    if (isMockPKCE) {
-      console.log('Using mock PKCE implementation for token exchange');
-    }
     
     // Verify the authorization code
     let codePayload;
     try {
       codePayload = jwt.verify(code, process.env.JWT_SECRET);
-      console.log('Auth code payload:', codePayload);
     } catch (error) {
-      // Blacklist invalid auth codes
-      await blacklistToken(code, 'auth_code', { 
-        reason: 'invalid_auth_code',
-        ipAddress: req.ip
-      });
-      
       console.error('Auth code verification error:', error);
       return res.status(401).json({ 
         error: 'invalid_grant',
@@ -688,12 +568,6 @@ const exchangeCodeForToken = async (req, res) => {
     
     // Check if this is an auth code
     if (codePayload.type !== 'auth_code') {
-      // Blacklist if not an auth code
-      await blacklistToken(code, 'auth_code', { 
-        reason: 'wrong_token_type',
-        ipAddress: req.ip
-      });
-      
       console.error('Invalid code type:', codePayload.type);
       return res.status(401).json({ 
         error: 'invalid_grant',
@@ -719,7 +593,6 @@ const exchangeCodeForToken = async (req, res) => {
       if (isMockPKCE) {
         // Special case for mock PKCE
         isValid = true;
-        console.log('Mock PKCE verification pass');
       } else {
         // Standard PKCE verification
         isValid = verifyPKCEChallenge(
@@ -727,17 +600,9 @@ const exchangeCodeForToken = async (req, res) => {
           pkceData.codeChallenge,
           pkceData.codeChallengeMethod
         );
-        console.log('PKCE verification result:', isValid);
       }
       
       if (!isValid) {
-        // Blacklist this authorization code
-        await blacklistToken(code, 'auth_code', { 
-          userId: codePayload.userId,
-          reason: 'pkce_verification_failed',
-          ipAddress: req.ip
-        });
-        
         return res.status(401).json({ 
           error: 'invalid_grant',
           error_description: 'Code verifier does not match code challenge' 
@@ -756,7 +621,7 @@ const exchangeCodeForToken = async (req, res) => {
       clearCodeChallenge(req);
     }
     
-    // Get temp auth code session or get the userId from the code payload directly
+    // Get the userId from the code payload
     const userId = codePayload.userId;
     
     if (!userId) {
@@ -766,13 +631,6 @@ const exchangeCodeForToken = async (req, res) => {
         error_description: 'Invalid authorization code - missing user ID' 
       });
     }
-    
-    // Blacklist the used auth code to prevent replay attacks
-    await blacklistToken(code, 'auth_code', { 
-      userId: userId,
-      reason: 'auth_code_used',
-      ipAddress: req.ip
-    });
     
     // Generate tokens
     const { token, refreshToken, expiresIn } = generateTokens(userId);
@@ -784,7 +642,6 @@ const exchangeCodeForToken = async (req, res) => {
     });
     
     // Success response with tokens in OAuth2 format
-    console.log('Token exchange successful');
     res.json({
       access_token: token,
       token_type: 'Bearer',
@@ -836,7 +693,6 @@ module.exports = {
   initiateOAuth,
   handleOAuthCallback,
   exchangeCodeForToken,
-  reportSecurityEvent,
   devLogin,
   checkTestUser,
   getApiUrl
