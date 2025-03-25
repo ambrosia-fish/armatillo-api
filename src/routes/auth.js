@@ -7,8 +7,7 @@ const {
   logout,
   getCurrentUser,
   initiateOAuth,
-  handleOAuthCallback,
-  devLogin
+  handleOAuthCallback
 } = require('../controllers/authController');
 const { 
   authenticate,
@@ -27,10 +26,5 @@ router.get('/google-callback', handleOAuthCallback);
 // Protected routes
 router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getCurrentUser);
-
-// Development-only routes
-if (process.env.NODE_ENV === 'development') {
-  router.get('/dev-login', devLogin);
-}
 
 module.exports = router;
