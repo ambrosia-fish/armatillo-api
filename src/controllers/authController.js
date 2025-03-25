@@ -48,7 +48,8 @@ const register = async (req, res) => {
     const user = await User.create({
       email,
       password,
-      displayName
+      displayName,
+      googleId: undefined // Explicitly set to undefined instead of null
     });
 
     const { token, refreshToken, expiresIn } = generateTokens(user._id);
