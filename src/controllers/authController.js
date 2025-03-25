@@ -252,11 +252,13 @@ const handleOAuthCallback = async (req, res, next) => {
       return res.redirect(`armatillo://auth-error?error=no_code`);
     }
     
+    // Optional state validation
     if (state && req.session.oauthState && state !== req.session.oauthState) {
       return res.redirect(`armatillo://auth-error?error=invalid_state`);
     }
     
-    const redirectUri = req.session.redirectUri || 'armatillo://auth/callback';
+    // Use environment-based or fallback redirect URI
+    const redirectUri = process.env.OAUTH_REDIRECT_URI || 'armatillo://auth/callback';
     req.session.oauthState = null;
     
     const userData = await getGoogleUserData(code);
@@ -287,7 +289,7 @@ const handleOAuthCallback = async (req, res, next) => {
     });
     
     return res.redirect(
-      `${redirectUri.includes('://') ? redirectUri : 'armatillo://auth/callback'}?token=${token}&refresh_token=${refreshToken}&expires_in=${expiresIn}&state=${state}`
+      `${redirectUri}?token=${token}&refresh_token=${refreshToken}&expires_in=${expiresIn}&state=${state || ''}`
     );
   } catch (error) {
     return res.redirect(`armatillo://auth-error?error=server_error&message=${encodeURIComponent(error.message)}`);
