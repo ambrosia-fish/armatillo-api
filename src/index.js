@@ -29,7 +29,7 @@ app.use(express.json({ limit: '1mb' }));
 
 // Session middleware for OAuth state
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'armatillo_session_secret', 
+  secret: process.env.SESSION_SECRET, 
   resave: false,
   saveUninitialized: false
 }));
