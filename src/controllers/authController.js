@@ -1,6 +1,5 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const TestUser = require('../models/TestUser');
 const RefreshToken = require('../models/RefreshToken');
 const { getGoogleUserData } = require('../utils/googleOAuth');
 const {
@@ -253,40 +252,6 @@ const initiateOAuth = (req, res) => {
 };
 
 /**
- * Check if a user is an approved test user
- */
-const isApprovedTestUser = async (email) => {
-  // In development, approve all users
-  if (process.env.NODE_ENV === 'development') {
-    return true;
-  }
-  
-  // For testing, approve specific test emails
-  if (email === 'test@example.com' || email.endsWith('@gmail.com')) {
-    return true;
-  }
-  
-  // Check if this is an approved test user
-  const testUser = await TestUser.findOne({ email });
-  return testUser && testUser.status === 'approved';
-};
-
-/**
- * Record a pending test user request
- */
-const recordPendingTestUser = async (email) => {
-  const existingUser = await TestUser.findOne({ email });
-  
-  if (!existingUser) {
-    await TestUser.create({
-      email,
-      status: 'pending',
-      notes: 'Automatic registration request'
-    });
-  }
-};
-
-/**
  * @desc    Handle OAuth callback
  * @route   GET /api/auth/google-callback
  */
@@ -306,27 +271,6 @@ const handleOAuthCallback = async (req, res) => {
     req.session.oauthState = null;
     
     const userData = await getGoogleUserData(code);
-    
-    const isApproved = await isApprovedTestUser(userData.email);
-    
-    if (!isApproved) {
-      await recordPendingTestUser(userData.email);
-      
-      const existingUser = await User.findOne({ 
-        $or: [
-          { googleId: userData.googleId },
-          { email: userData.email }
-        ]
-      });
-      
-      const message = existingUser 
-        ? "Thank you for your interest. Your access is pending approval."
-        : "Thank you for registering. Your access request is pending approval.";
-        
-      return res.redirect(
-        `armatillo://auth/pending?message=${encodeURIComponent(message)}`
-      );
-    }
     
     // Find or create user
     let user = await User.findOne({ googleId: userData.googleId });
@@ -408,30 +352,6 @@ const devLogin = async (req, res) => {
   }
 };
 
-/**
- * @desc    Check if a test user is approved
- * @route   POST /api/auth/check-test-user
- */
-const checkTestUser = async (req, res) => {
-  try {
-    const { email } = req.body;
-    
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
-    
-    const isApproved = await isApprovedTestUser(email);
-    
-    res.json({ 
-      approved: isApproved,
-      message: isApproved ? null : "Your access request is pending approval." 
-    });
-  } catch (error) {
-    console.error('Test user check error:', error);
-    res.status(500).json({ error: 'Failed to check test user status' });
-  }
-};
-
 module.exports = {
   register,
   login,
@@ -441,6 +361,5 @@ module.exports = {
   initiateOAuth,
   handleOAuthCallback,
   devLogin,
-  checkTestUser,
   getApiUrl
 };

@@ -8,8 +8,7 @@ const {
   getCurrentUser,
   initiateOAuth,
   handleOAuthCallback,
-  devLogin,
-  checkTestUser
+  devLogin
 } = require('../controllers/authController');
 const { 
   authenticate,
@@ -20,9 +19,6 @@ const {
 router.post('/register', register);
 router.post('/login', login);
 router.post('/refresh', refreshToken);
-
-// Test user check endpoint
-router.post('/check-test-user', checkTestUser);
 
 // OAuth routes
 router.get('/google-mobile', initiateOAuth);
