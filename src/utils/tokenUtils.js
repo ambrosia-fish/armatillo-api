@@ -14,13 +14,7 @@ const verifyToken = async (token) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     return decoded;
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      console.log('Token expired');
-    } else if (error.name === 'JsonWebTokenError') {
-      console.log('Invalid token signature');
-    } else {
-      console.error('Token verification error:', error.message);
-    }
+    console.error('Token verification error:', error.message);
     return null;
   }
 };
@@ -48,35 +42,8 @@ const extractTokenFromHeader = (req) => {
   return null;
 };
 
-/**
- * Extract token details for debugging/auditing (safe version)
- * @param {string} token - JWT token
- * @returns {Object} Safe subset of token data
- */
-const getTokenMetadata = (token) => {
-  try {
-    if (!token) return { valid: false };
-    
-    // Decode without verification for inspection
-    const decoded = jwt.decode(token);
-    if (!decoded) return { valid: false };
-    
-    // Return safe subset of data (no sensitive payload)
-    return {
-      valid: true,
-      issuedAt: decoded.iat ? new Date(decoded.iat * 1000).toISOString() : null,
-      expiresAt: decoded.exp ? new Date(decoded.exp * 1000).toISOString() : null,
-      type: decoded.type || 'access'
-    };
-  } catch (error) {
-    console.error('Error getting token metadata:', error);
-    return { valid: false, error: 'Invalid token format' };
-  }
-};
-
 module.exports = {
   verifyToken,
   generateToken,
-  extractTokenFromHeader,
-  getTokenMetadata
+  extractTokenFromHeader
 };
