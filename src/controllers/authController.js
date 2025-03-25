@@ -44,13 +44,15 @@ const register = async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // Create new user
-    const user = await User.create({
+    // Create new user - explicitly omit googleId for local registrations
+    const userData = {
       email,
       password,
-      displayName,
-      googleId: undefined // Explicitly set to undefined instead of null
-    });
+      displayName
+      // No googleId field for local users
+    };
+
+    const user = await User.create(userData);
 
     const { token, refreshToken, expiresIn } = generateTokens(user._id);
     
