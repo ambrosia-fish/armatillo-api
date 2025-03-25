@@ -12,9 +12,6 @@ const {
  * Get the API URL based on environment
  */
 const getApiUrl = () => {
-  if (process.env.RAILWAY_STATIC_URL) {
-    return 'https://armatillo-api-production.up.railway.app';
-  }
   return process.env.API_URL || 'http://localhost:3000';
 };
 
