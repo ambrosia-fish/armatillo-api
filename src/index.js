@@ -6,6 +6,7 @@ const connectDB = require('./config/db');
 const instanceRoutes = require('./routes/instances');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
+const { errorHandler } = require('./utils/errorHandler');
 
 dotenv.config();
 
@@ -18,7 +19,7 @@ const PORT = process.env.PORT || 3000;
 // Enable CORS for all routes
 app.use(cors());
 
-// Log requests
+// Request logging middleware
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   next();
@@ -45,13 +46,7 @@ app.get('/', (req, res) => {
 });
 
 // Global error handler
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ 
-    error: 'Server error', 
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined 
-  });
-});
+app.use(errorHandler.globalErrorMiddleware);
 
 // Start server
 app.listen(PORT, () => {
