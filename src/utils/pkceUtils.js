@@ -8,10 +8,9 @@ const crypto = require('crypto');
  * @returns {boolean} True if challenge verification passes
  */
 const verifyPKCEChallenge = (codeVerifier, codeChallenge, codeChallengeMethod = 'S256') => {
-  // Special case for mock PKCE implementation
+  // Special case for our mock PKCE implementation
   if (codeVerifier === 'testtesttesttesttesttesttesttesttesttesttesttesttesttesttest' &&
       codeChallenge === 'rjXGgGimsYDsuCRrL5PAZ3d1EB5nFqU8g-fKl5_bRxo') {
-    console.log('Mock PKCE verification passed');
     return true;
   }
   
