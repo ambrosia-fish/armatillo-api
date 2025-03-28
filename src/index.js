@@ -16,8 +16,30 @@ connectDB();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Enable CORS for all routes
-app.use(cors());
+// Get allowed origins from environment variable
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',') 
+  : [];
+
+// Apply CORS with specific configuration
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if the origin is allowed
+    if (allowedOrigins.length === 0 || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log(`Origin ${origin} not allowed by CORS`);
+      callback(null, true); // Still allow for now, but log it
+    }
+  },
+  credentials: true
+}));
+
+// Log origins for debugging
+console.log('CORS configured with allowed origins:', allowedOrigins);
 
 // Request logging middleware
 app.use((req, res, next) => {
