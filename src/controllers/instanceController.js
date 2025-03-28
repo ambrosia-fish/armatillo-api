@@ -1,35 +1,51 @@
 const Instance = require('../models/Instance');
 const { AppError } = require('../utils/errorHandler');
 
-// Normalize data to handle both new and legacy formats
+// Normalize data to standardized format
 const normalizeInstanceData = (data) => {
   const normalized = { ...data };
 
-  // Handle intentionType vs automatic (legacy) field
-  if (normalized.intentionType && !normalized.automatic) {
-    normalized.automatic = normalized.intentionType === 'automatic';
-  } else if (normalized.automatic !== undefined && !normalized.intentionType) {
-    normalized.intentionType = normalized.automatic ? 'automatic' : 'intentional';
+  // Set intentionType if it doesn't exist
+  if (!normalized.intentionType) {
+    if (normalized.automatic !== undefined) {
+      normalized.intentionType = normalized.automatic ? 'automatic' : 'intentional';
+    } else {
+      normalized.intentionType = 'automatic'; // Default value
+    }
+    
+    // Remove legacy field
+    delete normalized.automatic;
   }
 
-  // Handle selectedEmotions vs feelings (legacy) field
-  if (normalized.selectedEmotions && normalized.selectedEmotions.length > 0 && !normalized.feelings) {
-    normalized.feelings = normalized.selectedEmotions;
-  } else if (normalized.feelings && normalized.feelings.length > 0 && !normalized.selectedEmotions) {
+  // Set time if it doesn't exist
+  if (!normalized.time && normalized.createdAt) {
+    normalized.time = normalized.createdAt;
+  }
+  
+  // Handle legacy emotion/feeling fields
+  if (!normalized.selectedEmotions && normalized.feelings) {
     normalized.selectedEmotions = normalized.feelings;
+    delete normalized.feelings;
   }
-
-  // Handle selectedEnvironments vs environment (legacy) field
-  if (normalized.selectedEnvironments && normalized.selectedEnvironments.length > 0 && !normalized.environment) {
-    normalized.environment = normalized.selectedEnvironments;
-  } else if (normalized.environment && normalized.environment.length > 0 && !normalized.selectedEnvironments) {
+  
+  // Handle legacy environment fields
+  if (!normalized.selectedEnvironments && normalized.environment) {
     normalized.selectedEnvironments = normalized.environment;
+    delete normalized.environment;
   }
-
-  // Handle selectedThoughts vs thoughts (legacy) field
-  if (normalized.selectedThoughts && normalized.selectedThoughts.length > 0 && !normalized.thoughts) {
-    // Convert array to string for legacy format
-    normalized.thoughts = normalized.selectedThoughts.join(', ');
+  
+  // Handle legacy thoughts field
+  if (!normalized.selectedThoughts && normalized.thoughts) {
+    // Convert string to array
+    if (typeof normalized.thoughts === 'string') {
+      normalized.selectedThoughts = [normalized.thoughts];
+    }
+    delete normalized.thoughts;
+  }
+  
+  // Ensure duration is always present
+  if (normalized.duration === undefined) {
+    normalized.duration = 5; // Default value
   }
 
   return normalized;
@@ -37,9 +53,9 @@ const normalizeInstanceData = (data) => {
 
 exports.getInstances = async (req, res, next) => {
   try {
-    const instances = await Instance.find({ user_id: req.user._id }).sort({ createdAt: -1 });
+    const instances = await Instance.find({ user_id: req.user._id }).sort({ time: -1 });
     
-    // Map instances to ensure consistent response format
+    // Convert to standard format and return
     const normalizedInstances = instances.map(instance => {
       const instanceObj = instance.toObject();
       return normalizeInstanceData(instanceObj);
@@ -63,7 +79,7 @@ exports.getInstance = async (req, res, next) => {
       return next(new AppError('Instance not found', 404));
     }
     
-    // Normalize instance data
+    // Normalize to standard format
     const normalizedInstance = normalizeInstanceData(instance.toObject());
     
     res.status(200).json(normalizedInstance);
@@ -75,9 +91,10 @@ exports.getInstance = async (req, res, next) => {
 
 exports.createInstance = async (req, res, next) => {
   try {
-    // Normalize incoming data
+    // Normalize incoming data to standardized format
     const normalizedData = normalizeInstanceData(req.body);
     
+    // Add user data
     const instanceData = {
       ...normalizedData,
       user_id: req.user._id,
@@ -99,7 +116,7 @@ exports.createInstance = async (req, res, next) => {
 
 exports.updateInstance = async (req, res, next) => {
   try {
-    // Normalize incoming data
+    // Normalize incoming data to standardized format
     const normalizedData = normalizeInstanceData(req.body);
     
     const instance = await Instance.findOneAndUpdate(
