@@ -28,6 +28,11 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  approved: {
+    type: Boolean,
+    default: false,
+    description: 'Whether the user is approved to use the application'
+  },
   createdAt: {
     type: Date,
     default: Date.now
