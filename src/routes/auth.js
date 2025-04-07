@@ -11,6 +11,7 @@ const {
 } = require('../controllers/authController');
 const { 
   authenticate,
+  approvedOnly,
   authErrorHandler
 } = require('../middleware/auth');
 
@@ -25,6 +26,9 @@ router.get('/google-callback', handleOAuthCallback);
 
 // Protected routes
 router.post('/logout', authenticate, logout);
-router.get('/me', authenticate, getCurrentUser);
+router.get('/me', authenticate, approvedOnly, getCurrentUser);
+
+// Apply auth error handler
+router.use(authErrorHandler);
 
 module.exports = router;
