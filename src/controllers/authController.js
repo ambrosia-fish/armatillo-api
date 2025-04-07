@@ -44,27 +44,21 @@ const register = async (req, res, next) => {
     const userData = {
       email,
       password,
-      displayName
+      displayName,
+      approved: false // Set approved to false by default for new users
     };
 
     const user = await User.create(userData);
 
-    const { token, refreshToken, expiresIn } = generateTokens(user._id);
-    
-    await RefreshToken.create({
-      userId: user._id,
-      token: refreshToken
-    });
-
+    // Return a specific message for unapproved users
     res.status(201).json({
       success: true,
-      token,
-      refreshToken,
-      expiresIn,
+      message: "Thank you for registering! Your account is pending approval. You will be notified when your account is approved.",
       user: {
         id: user._id,
         email: user.email,
-        displayName: user.displayName
+        displayName: user.displayName,
+        approved: user.approved
       }
     });
   } catch (error) {
@@ -90,6 +84,11 @@ const login = async (req, res, next) => {
       return next(new AppError('Invalid credentials', 401));
     }
 
+    // Check if the user is approved
+    if (!user.approved) {
+      return next(new AppError('Thank You for your interest in Armatillo! It is currently in pre-alpha and testing is only available to certain users. Please contact josef@feztech.io if you would like to participate in testing', 403));
+    }
+
     const { token, refreshToken, expiresIn } = generateTokens(user._id);
     
     await RefreshToken.create({
@@ -105,7 +104,8 @@ const login = async (req, res, next) => {
       user: {
         id: user._id,
         email: user.email,
-        displayName: user.displayName
+        displayName: user.displayName,
+        approved: user.approved
       }
     });
   } catch (error) {
@@ -137,6 +137,13 @@ const refreshToken = async (req, res, next) => {
     const tokenDoc = await RefreshToken.findOne({ token: requestToken });
     if (!tokenDoc) {
       return next(new AppError('Refresh token not found', 401));
+    }
+    
+    // Check if the user is still approved
+    const user = await User.findById(decoded.userId);
+    if (!user || !user.approved) {
+      await RefreshToken.findByIdAndDelete(tokenDoc._id);
+      return next(new AppError('Your account is no longer approved. Please contact josef@feztech.io for assistance.', 403));
     }
     
     const { token, refreshToken: newRefreshToken, expiresIn } = generateTokens(decoded.userId);
@@ -184,10 +191,16 @@ const getCurrentUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id);
     
+    // Check if user is still approved
+    if (!user.approved) {
+      return next(new AppError('Your account is no longer approved. Please contact josef@feztech.io for assistance.', 403));
+    }
+    
     res.json({
       id: user._id,
       email: user.email,
-      displayName: user.displayName
+      displayName: user.displayName,
+      approved: user.approved
     });
   } catch (error) {
     next(new AppError('Failed to get user info', 500));
@@ -276,9 +289,24 @@ const handleOAuthCallback = async (req, res, next) => {
           email: userData.email,
           displayName: userData.displayName,
           googleId: userData.googleId,
-          password: jwt.sign({ random: Math.random() }, process.env.JWT_SECRET)
+          password: jwt.sign({ random: Math.random() }, process.env.JWT_SECRET),
+          approved: false // Set approved to false by default for new OAuth users
         });
+        
+        // If the user is not approved, redirect to error page
+        if (!user.approved) {
+          return res.redirect(
+            `armatillo://auth-error?error=not_approved&message=${encodeURIComponent('Thank You for your interest in Armatillo! It is currently in pre-alpha and testing is only available to certain users. Please contact josef@feztech.io if you would like to participate in testing')}`
+          );
+        }
       }
+    }
+    
+    // Check if the user is approved
+    if (!user.approved) {
+      return res.redirect(
+        `armatillo://auth-error?error=not_approved&message=${encodeURIComponent('Thank You for your interest in Armatillo! It is currently in pre-alpha and testing is only available to certain users. Please contact josef@feztech.io if you would like to participate in testing')}`
+      );
     }
     
     const { token, refreshToken, expiresIn } = generateTokens(user._id);
@@ -296,6 +324,57 @@ const handleOAuthCallback = async (req, res, next) => {
   }
 };
 
+// Add admin endpoints for approving users and managing approval status
+const approveUser = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!req.user.isAdmin) {
+      return next(new AppError('Unauthorized', 403));
+    }
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(new AppError('User not found', 404));
+    }
+    
+    user.approved = true;
+    await user.save();
+    
+    res.json({
+      success: true,
+      message: 'User approved successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        displayName: user.displayName,
+        approved: user.approved
+      }
+    });
+  } catch (error) {
+    next(new AppError('Failed to approve user', 500));
+  }
+};
+
+// Get all pending (unapproved) users
+const getPendingUsers = async (req, res, next) => {
+  try {
+    if (!req.user.isAdmin) {
+      return next(new AppError('Unauthorized', 403));
+    }
+    
+    const pendingUsers = await User.find({ approved: false }).select('-password');
+    
+    res.json({
+      success: true,
+      count: pendingUsers.length,
+      users: pendingUsers
+    });
+  } catch (error) {
+    next(new AppError('Failed to get pending users', 500));
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -304,5 +383,7 @@ module.exports = {
   getCurrentUser,
   initiateOAuth,
   handleOAuthCallback,
-  getApiUrl
+  getApiUrl,
+  approveUser,
+  getPendingUsers
 };
