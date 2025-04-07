@@ -10,7 +10,7 @@ const InstanceSchema = new mongoose.Schema({
 
   // Core tracking fields
   duration: { type: Number, required: true }, 
-  urgeStrength: { type: Number },
+  urgeStrength: { type: Number, required: true },
   intentionType: { 
     type: String, 
     enum: ['automatic', 'intentional'],
@@ -18,26 +18,16 @@ const InstanceSchema = new mongoose.Schema({
   },
   
   // Selected categories (arrays of option IDs)
-  selectedEnvironments: { type: [String] },
-  selectedEmotions: { type: [String] },
-  selectedSensations: { type: [String] },
-  selectedThoughts: { type: [String] },
-  selectedSensoryTriggers: { type: [String] },
-  
-  // Optional detail fields for each category
-  mentalDetails: { type: String },
-  physicalDetails: { type: String },
-  thoughtDetails: { type: String },
-  environmentDetails: { type: String },
-  sensoryDetails: { type: String },
+  selectedEnvironments: { type: [String], default: [] },
+  selectedActivities: { type: [String], default: [] },
+  selectedEmotions: { type: [String], default: [] },
+  selectedThoughts: { type: [String], default: [] },
+  selectedSensations: { type: [String], default: [] },
   
   // Additional fields
-  location: { type: String },
-  activity: { type: String },
   notes: { type: String },
   
   // User information
-  userName: { type: String },
   user_id: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
