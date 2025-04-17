@@ -4,7 +4,13 @@ const { AppError } = require('../utils/errorHandler');
 // Helper function to normalize data if needed
 const normalizeStrategyData = (data) => {
   const normalized = { ...data };
-  // Add any normalization logic here if needed
+  
+  // Ensure arrays are initialized
+  if (!normalized.competingResponses) normalized.competingResponses = [];
+  if (!normalized.stimulusControls) normalized.stimulusControls = [];
+  if (!normalized.communitySupports) normalized.communitySupports = [];
+  if (!normalized.notifications) normalized.notifications = [];
+  
   return normalized;
 };
 
