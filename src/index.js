@@ -6,6 +6,7 @@ const connectDB = require('./config/db');
 const instanceRoutes = require('./routes/instances');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
+const strategyRoutes = require('./routes/strategies');
 const { errorHandler } = require('./utils/errorHandler');
 
 dotenv.config();
@@ -61,6 +62,7 @@ app.use(session({
 app.use('/api/instances', instanceRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/strategies', strategyRoutes);
 
 // Root route
 app.get('/', (req, res) => {
