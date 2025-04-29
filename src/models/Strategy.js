@@ -47,6 +47,9 @@ const StrategySchema = new mongoose.Schema({
   // Trigger or context this strategy applies to
   trigger: { type: String, required: true },
   
+  // Usage tracking
+  useCount: { type: Number, default: 0 },
+  
   // Core components - using sub-schemas
   competingResponses: [CompetingResponseSchema],
   stimulusControls: [StimulusControlSchema],

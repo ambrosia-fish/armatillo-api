@@ -6,7 +6,8 @@ const {
   updateStrategy,
   deleteStrategy,
   getStrategiesByTrigger,
-  toggleStrategyStatus
+  toggleStrategyStatus,
+  incrementUseCount
 } = require('../controllers/strategyController');
 const { authenticate, approvedOnly } = require('../middleware/auth');
 
@@ -34,5 +35,8 @@ router.route('/trigger/:trigger')
 
 router.route('/:id/toggle-status')
   .put(toggleStrategyStatus);
+
+  router.route('/:id/increment-use-count')
+  .put(incrementUseCount);
 
 module.exports = router;

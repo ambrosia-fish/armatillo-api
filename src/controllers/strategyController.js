@@ -233,3 +233,32 @@ exports.toggleStrategyStatus = async (req, res, next) => {
     next(new AppError('Failed to toggle strategy status', 500));
   }
 };
+
+// Increment strategy use count
+exports.incrementUseCount = async (req, res, next) => {
+  try {
+    const strategy = await Strategy.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        user_id: req.user._id
+      },
+      { 
+        $inc: { useCount: 1 },
+        updatedAt: Date.now() 
+      },
+      { new: true, runValidators: true }
+    );
+    
+    if (!strategy) {
+      return next(new AppError('Strategy not found', 404));
+    }
+    
+    // Return normalized response
+    const normalizedResponse = normalizeStrategyData(strategy.toObject());
+    
+    res.status(200).json(normalizedResponse);
+  } catch (error) {
+    console.error('Error in incrementUseCount:', error);
+    next(new AppError('Failed to increment strategy use count', 500));
+  }
+};
