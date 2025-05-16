@@ -10,25 +10,28 @@ Armatillo API provides the backend infrastructure for the Armatillo mobile appli
 
 ```
 src/
-  ├── config/              # Database and environment configuration
-  ├── controllers/         # Request handlers and business logic
+  ├── config/            # Database and environment configuration
+  ├── controllers/       # Request handlers and business logic
   │   ├── authController.js
-  │   └── instanceController.js
-  ├── middleware/          # Custom middleware functions
+  │   ├── instanceController.js
+  │   └── strategyController.js
+  ├── middleware/        # Custom middleware functions
   │   └── auth.js
-  ├── models/              # MongoDB schema definitions
-  │   ├── Instance.js      # BFRB tracking data model
+  ├── models/            # MongoDB schema definitions
+  │   ├── Instance.js    # BFRB tracking data model
   │   ├── RefreshToken.js  # Token storage for auth
-  │   └── User.js          # User account model
-  ├── routes/              # API route definitions
+  │   ├── Strategy.js    # Strategy data model for habit reversal
+  │   └── User.js        # User account model
+  ├── routes/            # API route definitions
   │   ├── admin.js
   │   ├── auth.js
-  │   └── instances.js
-  ├── utils/               # Helper functions
+  │   ├── instances.js
+  │   └── strategies.js
+  ├── utils/             # Helper functions
   │   ├── errorHandler.js  # Error handling utilities
   │   ├── googleOAuth.js   # Google OAuth integration
   │   └── tokenUtils.js    # JWT token management
-  └── index.js             # Main application entry point
+  └── index.js           # Main application entry point
 ```
 
 ## Setup
@@ -68,6 +71,35 @@ The core data model for tracking BFRB episodes:
 - `notes`: Optional text notes about the episode
 - `user_id`: Reference to the user who recorded this instance
 
+### Strategy Model
+
+The model for habit reversal training strategies:
+
+- `name`: Strategy name
+- `description`: Strategy description
+- `trigger`: Trigger that prompts the BFRB
+- `isActive`: Whether the strategy is currently active
+- `competingResponses`: Array of alternative behaviors to replace the BFRB
+  - `description`: Description of the competing response
+  - `notes`: Additional notes
+  - `isActive`: Whether this response is active
+- `stimulusControls`: Array of environmental modifications
+  - `description`: Description of the stimulus control
+  - `notes`: Additional notes
+  - `isActive`: Whether this control is active
+- `communitySupports`: Array of supportive contacts
+  - `name`: Person's name
+  - `relationship`: Relationship to the user
+  - `contactInfo`: Contact information
+  - `notes`: Additional notes
+  - `isActive`: Whether this support is active
+- `notifications`: Array of reminders
+  - `message`: Notification content
+  - `frequency`: 'daily', 'weekly', or 'custom'
+  - `time`: When to send the notification
+  - `isActive`: Whether this notification is active
+- `user_id`: Reference to the strategy owner
+
 ### User Model
 
 Handles user account information:
@@ -106,6 +138,54 @@ When running in development mode (`NODE_ENV=development`):
 - `GET /api/instances/:id` - Get instance by ID
 - `PUT /api/instances/:id` - Update instance
 - `DELETE /api/instances/:id` - Delete instance
+
+### Strategy Endpoints
+
+1. Get All Strategies
+   - Endpoint: `GET /api/strategies`
+   - Authentication: Required
+   - Description: Retrieves all strategies for the authenticated user
+   - Response: Array of strategy objects
+
+2. Get Strategy by ID
+   - Endpoint: `GET /api/strategies/:id`
+   - Authentication: Required
+   - Parameters: id - Strategy ID in URL path
+   - Response: Single strategy object
+
+3. Create Strategy
+   - Endpoint: `POST /api/strategies`
+   - Authentication: Required
+   - Request Body: Strategy object with required fields
+   - Description: Creates a new strategy
+   - Response: Created strategy object with generated IDs and timestamps
+
+4. Update Strategy
+   - Endpoint: `PUT /api/strategies/:id`
+   - Authentication: Required
+   - Parameters: id - Strategy ID in URL path
+   - Request Body: Strategy data to update
+   - Response: Updated strategy object
+
+5. Delete Strategy
+   - Endpoint: `DELETE /api/strategies/:id`
+   - Authentication: Required
+   - Parameters: id - Strategy ID in URL path
+   - Response: Success message
+
+6. Get Strategies by Trigger
+   - Endpoint: `GET /api/strategies/trigger/:trigger`
+   - Authentication: Required
+   - Parameters: trigger - Trigger name in URL path
+   - Description: Retrieves all strategies for a specific trigger
+   - Response: Array of strategy objects
+
+7. Toggle Strategy Status
+   - Endpoint: `PUT /api/strategies/:id/toggle-status`
+   - Authentication: Required
+   - Parameters: id - Strategy ID in URL path
+   - Description: Toggles the active status of a strategy
+   - Response: Updated strategy object with toggled isActive field
 
 ### Admin Routes
 
@@ -151,3 +231,13 @@ The API returns standardized error responses with appropriate status codes and e
 - winston - Logging
 - express-session - Session management for OAuth
 - axios - HTTP client for OAuth integration
+
+## License
+
+MIT
+
+## Development Status
+
+This API is currently in active development (pre-alpha stage).
+
+For more information or to become a tester, contact: josef@feztech.io
